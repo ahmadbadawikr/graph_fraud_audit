@@ -1,0 +1,182 @@
+{
+    "run_date": "2025-12-29",
+    "experiments": {
+        "7_SAGE": {
+            "script": "7_train_gnn_standalone.py",
+            "model": "GraphSAGE",
+            "params": 23205,
+            "test_auc": 0.7043,
+            "test_f1": 0.2486,
+            "precision": 0.15,
+            "recall": 0.57,
+            "threshold": 0.582,
+            "confusion_matrix": [
+                [
+                    621,
+                    240
+                ],
+                [
+                    33,
+                    44
+                ]
+            ]
+        },
+        "7_GAT": {
+            "script": "7_train_gnn_standalone.py",
+            "model": "GAT",
+            "params": 24485,
+            "test_auc": 0.7067,
+            "test_f1": 0.2489,
+            "precision": 0.15,
+            "recall": 0.75,
+            "threshold": 0.533,
+            "confusion_matrix": [
+                [
+                    523,
+                    338
+                ],
+                [
+                    19,
+                    58
+                ]
+            ]
+        },
+        "7_Transformer": {
+            "script": "7_train_gnn_standalone.py",
+            "model": "Transformer",
+            "params": 47525,
+            "test_auc": 0.7164,
+            "test_f1": 0.2636,
+            "precision": 0.20,
+            "recall": 0.36,
+            "threshold": 0.647,
+            "confusion_matrix": [
+                [
+                    747,
+                    114
+                ],
+                [
+                    49,
+                    28
+                ]
+            ]
+        },
+        "8_Ensemble": {
+            "script": "8_final_ensemble_optimization.py",
+            "model": "GNN + MLP + XGBoost Ensemble",
+            "best_config": {
+                "hidden": 32,
+                "heads": 1,
+                "dropout": 0.3,
+                "lr": 0.001
+            },
+            "best_weights": {
+                "GNN": 0.4,
+                "MLP": 0.4,
+                "XGB": 0.2
+            },
+            "test_auc": 0.7153,
+            "test_f1": 0.2475,
+            "precision": 0.16,
+            "recall": 0.48,
+            "threshold": 0.354,
+            "confusion_matrix": [
+                [
+                    676,
+                    187
+                ],
+                [
+                    39,
+                    36
+                ]
+            ]
+        },
+        "9_TransformerV2": {
+            "script": "9_transformer_v2.py",
+            "model": "TransformerV2 (3-layer, Focal Loss)",
+            "params": 1028549,
+            "test_auc": 0.7046,
+            "test_f1": 0.2559,
+            "precision": 0.15,
+            "recall": 0.67,
+            "threshold": 0.318,
+            "note": "Early stopping at epoch 14",
+            "confusion_matrix": [
+                [
+                    570,
+                    289
+                ],
+                [
+                    26,
+                    53
+                ]
+            ]
+        },
+        "10_TransformerV3": {
+            "script": "10_transformer_v3.py",
+            "model": "TransformerV3 (Regularized)",
+            "params": 101477,
+            "test_auc": 0.6078,
+            "test_f1": 0.1961,
+            "precision": 0.19,
+            "recall": 0.18,
+            "threshold": 0.674,
+            "note": "Performance degraded - possibly overfit"
+        },
+        "12_Basic": {
+            "script": "12_graph_transformer_basic.py",
+            "model": "Basic Transformer (Minimal)",
+            "params": 6440,
+            "test_auc": 0.7003,
+            "test_f1": 0.2637,
+            "precision": 0.18,
+            "recall": 0.44,
+            "threshold": 0.630
+        },
+        "13_Final": {
+            "script": "13_transformer_final.py",
+            "model": "Final Optimized Transformer",
+            "params": 10216,
+            "test_auc": 0.7042,
+            "test_f1": 0.2661,
+            "precision": 0.19,
+            "recall": 0.39,
+            "threshold": 0.671
+        },
+        "14_HGT": {
+            "script": "14_train_hgt.py",
+            "model": "Heterogeneous Graph Transformer (HGT)",
+            "params": 209435,
+            "test_auc": 0.7417,
+            "test_f1": 0.2976,
+            "precision": 0.25,
+            "recall": 0.34,
+            "threshold": 0.656,
+            "device": "CPU (forced for stability)",
+            "note": "BEST SINGLE MODEL"
+        },
+        "15_Hybrid": {
+            "script": "15_hybrid_gnn_xgboost.py",
+            "model": "GNN Embeddings + XGBoost",
+            "test_auc": 0.6605,
+            "test_f1": 0.1874,
+            "precision": 0.11,
+            "recall": 0.63,
+            "threshold": 0.151,
+            "tabular_baseline_auc": 0.6121,
+            "lift": 0.0484
+        }
+    },
+    "best_model": {
+        "name": "14_HGT",
+        "auc": 0.7417,
+        "f1": 0.2976
+    },
+    "dataset_stats": {
+        "total_pekerja": 6250,
+        "fraud_cases": 528,
+        "fraud_rate": "8.4%",
+        "test_samples": 938,
+        "test_fraud": "~70-90 depending on split"
+    }
+}

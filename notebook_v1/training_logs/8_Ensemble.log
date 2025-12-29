@@ -1,0 +1,66 @@
+Device: mps
+🚀 Starting Final Optimization Pipeline
+
+[Data] Loading HeteroData (16GB)...
+[Data] Computing pekerja features...
+[Data] Initializing other node features...
+[Data] Adding reverse edges (Undirected)...
+
+==================================================
+A. Tuning GraphTransformer (Lightweight Trials)
+==================================================
+
+Trial 1: {'hidden': 32, 'heads': 1, 'dropout': 0.3, 'lr': 0.001}
+   -> Val AUC: 0.7147
+
+Trial 2: {'hidden': 64, 'heads': 1, 'dropout': 0.3, 'lr': 0.001}
+   -> Val AUC: 0.7088
+
+Trial 3: {'hidden': 32, 'heads': 1, 'dropout': 0.3, 'lr': 0.0005}
+   -> Val AUC: 0.7086
+
+🏆 Best GNN Config: {'hidden': 32, 'heads': 1, 'dropout': 0.3, 'lr': 0.001} (Val AUC: 0.7147)
+
+==================================================
+B. Generating Predictions for Ensemble
+==================================================
+   Evaluating GNN on Test Set...
+   Training MLP...
+   Training XGBoost...
+
+==================================================
+C. Optimizing Ensemble Weights
+==================================================
+🏆 Best Weights: GNN=0.4, MLP=0.4, XGB=0.2
+------------------------------------------------------------
+✅ FINAL ENSEMBLE RESULTS (thresh=0.354):
+   AUC: 0.7153 | F1: 0.2475
+--------------------
+              precision    recall  f1-score   support
+
+   Non-Fraud       0.95      0.78      0.86       863
+       Fraud       0.16      0.48      0.24        75
+
+    accuracy                           0.76       938
+   macro avg       0.55      0.63      0.55       938
+weighted avg       0.88      0.76      0.81       938
+
+Confusion Matrix:
+ [[676 187]
+ [ 39  36]]
+/opt/miniconda3/lib/python3.12/site-packages/torch_geometric/nn/fx.py:132: UserWarning: Found function 'dropout' with keyword argument 'training'. During FX tracing, this will likely be baked in as a constant value. Consider replacing this function by a module to properly encapsulate its training flag.
+  warnings.warn(f"Found function '{node.name}' with keyword "
+/opt/miniconda3/lib/python3.12/site-packages/torch_geometric/utils/_scatter.py:100: UserWarning: The operator 'aten::scatter_reduce.two_out' is not currently supported on the MPS backend and will fall back to run on the CPU. This may have performance implications. (Triggered internally at /Users/runner/work/pytorch/pytorch/pytorch/aten/src/ATen/mps/MPSFallback.mm:13.)
+  return src.new_zeros(size).scatter_reduce_(
+/opt/miniconda3/lib/python3.12/site-packages/torch_geometric/nn/fx.py:132: UserWarning: Found function 'dropout' with keyword argument 'training'. During FX tracing, this will likely be baked in as a constant value. Consider replacing this function by a module to properly encapsulate its training flag.
+  warnings.warn(f"Found function '{node.name}' with keyword "
+/opt/miniconda3/lib/python3.12/site-packages/torch_geometric/nn/fx.py:132: UserWarning: Found function 'dropout' with keyword argument 'training'. During FX tracing, this will likely be baked in as a constant value. Consider replacing this function by a module to properly encapsulate its training flag.
+  warnings.warn(f"Found function '{node.name}' with keyword "
+/opt/miniconda3/lib/python3.12/site-packages/torch_geometric/nn/fx.py:132: UserWarning: Found function 'dropout' with keyword argument 'training'. During FX tracing, this will likely be baked in as a constant value. Consider replacing this function by a module to properly encapsulate its training flag.
+  warnings.warn(f"Found function '{node.name}' with keyword "
+/opt/miniconda3/lib/python3.12/site-packages/sklearn/neural_network/_multilayer_perceptron.py:690: ConvergenceWarning: Stochastic Optimizer: Maximum iterations (100) reached and the optimization hasn't converged yet.
+  warnings.warn(
+/opt/miniconda3/lib/python3.12/site-packages/xgboost/training.py:199: UserWarning: [10:18:11] WARNING: /Users/runner/work/xgboost/xgboost/src/learner.cc:790: 
+Parameters: { "use_label_encoder" } are not used.
+
+  bst.update(dtrain, iteration=i, fobj=obj)
