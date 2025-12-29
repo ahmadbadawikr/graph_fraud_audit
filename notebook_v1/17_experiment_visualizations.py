@@ -73,6 +73,7 @@ TRAINING_DATA = {
         'epochs': list(range(1, 11)),
         'val_auc': [0.5603, 0.6233, 0.6032, 0.6512, 0.6288, 0.6595, 0.6363, 0.6502, 0.6520, 0.6646],
         'val_f1': [0.1736, 0.1834, 0.1908, 0.1929, 0.1930, 0.1962, 0.1930, 0.1940, 0.2040, 0.2105],
+        'loss': [1.2724, 1.2585, 1.2416, 1.2239, 1.2111, 1.1886, 1.1789, 1.1752, 1.1648, 1.1553],
     },
     'Transformer': {
         'epochs': list(range(1, 11)),
@@ -300,40 +301,95 @@ def plot_complexity_performance():
 # FIGURE 6: HGT Deep Dive (Best AUC Model)
 # ============================================================================
 def plot_hgt_deep_dive():
-    fig, axes = plt.subplots(1, 3, figsize=(15, 4.5))
+    """HGT deep dive - BEST AUC model"""
+    fig = plt.figure(figsize=(16, 10))
     
+    gs = fig.add_gridspec(2, 2, hspace=0.3, wspace=0.3)
     data = TRAINING_DATA['HGT']
     
-    # Loss curve
-    ax = axes[0]
-    ax.plot(data['epochs'], data['loss'], 'r-o', linewidth=2, markersize=5)
-    ax.set_xlabel('Epoch')
-    ax.set_ylabel('Training Loss')
-    ax.set_title('HGT Training Loss')
-    ax.grid(True, alpha=0.3)
+    # Top Left: Training Loss
+    ax1 = fig.add_subplot(gs[0, 0])
+    ax1.plot(data['epochs'], data['loss'], 'o-', linewidth=2, markersize=6, color='#e74c3c')
+    ax1.set_xlabel('Epoch')
+    ax1.set_ylabel('Training Loss')
+    ax1.set_title('HGT Training Loss')
+    ax1.grid(True, alpha=0.3)
     
-    # Val AUC curve
-    ax = axes[1]
-    ax.plot(data['epochs'], data['val_auc'], 'b-s', linewidth=2, markersize=5)
+    # Top Right: Val AUC curve
+    ax2 = fig.add_subplot(gs[0, 1])
+    ax2.plot(data['epochs'], data['val_auc'], 's-', linewidth=2, markersize=6, color=COLORS['HGT'])
     best_epoch = np.argmax(data['val_auc']) + 1
-    ax.axvline(x=best_epoch, color='green', linestyle='--', alpha=0.7, label=f'Best Epoch: {best_epoch}')
-    ax.set_xlabel('Epoch')
-    ax.set_ylabel('Validation AUC')
-    ax.set_title('HGT Validation AUC')
-    ax.legend()
-    ax.grid(True, alpha=0.3)
+    ax2.axvline(x=best_epoch, color='green', linestyle='--', alpha=0.7, label=f'Best: Ep {best_epoch}')
+    ax2.set_xlabel('Epoch')
+    ax2.set_ylabel('Validation AUC')
+    ax2.set_title('HGT Validation AUC')
+    ax2.legend()
+    ax2.set_ylim(0.68, 0.75)
+    ax2.grid(True, alpha=0.3)
     
-    # Final confusion matrix
-    ax = axes[2]
+    # Bottom Left: Metrics + Confusion Matrix
+    ax3 = fig.add_subplot(gs[1, 0])
+    ax3.axis('off')
+    
     cm = CONFUSION_MATRICES['HGT']
-    sns.heatmap(cm, annot=True, fmt='d', cmap='Greens', ax=ax,
-                xticklabels=['Non-Fraud', 'Fraud'],
-                yticklabels=['Non-Fraud', 'Fraud'],
-                cbar=False)
-    ax.set_title(f'HGT Confusion Matrix\n(Test AUC={ALL_MODELS["HGT"]["auc"]:.4f})')
+    tn, fp, fn, tp = cm[0,0], cm[0,1], cm[1,0], cm[1,1]
+    recall = tp / (tp + fn)
+    precision = tp / (tp + fp)
     
-    plt.suptitle('Figure 6: HGT Model Deep Dive (Best AUC: 0.7417)', fontsize=14, y=1.05)
-    plt.tight_layout()
+    metrics_text = f"""
+    ╔══════════════════════════════════════════════════╗
+    ║          HGT PERFORMANCE METRICS                 ║
+    ╠══════════════════════════════════════════════════╣
+    ║  Test AUC:       {ALL_MODELS['HGT']['auc']:.4f} (BEST!)                  ║
+    ║  Test F1:        {ALL_MODELS['HGT']['f1']:.4f}                        ║
+    ║  Recall:         {recall:.0%}                           ║
+    ║  Precision:      {precision:.0%} (BEST!)                    ║
+    ║  Parameters:     {ALL_MODELS['HGT']['params']:,}                      ║
+    ║  Epochs:         15                              ║
+    ╠══════════════════════════════════════════════════╣
+    ║  Confusion Matrix:  TN={tn} FP={fp}              ║
+    ║                     FN={fn} TP={tp}              ║
+    ╠══════════════════════════════════════════════════╣
+    ║  🎯 WHY HGT HAS BEST AUC:                        ║
+    ║  • Type-specific attention per edge type         ║
+    ║  • Native heterogeneous graph support            ║
+    ║  • Higher precision = fewer false alarms         ║
+    ╚══════════════════════════════════════════════════╝
+    """
+    ax3.text(0.5, 0.5, metrics_text, fontsize=10, ha='center', va='center',
+             transform=ax3.transAxes, family='monospace',
+             bbox=dict(boxstyle='round', facecolor='#e8f5e9', edgecolor='#1abc9c', linewidth=2))
+    
+    # Bottom Right: Architecture diagram
+    ax4 = fig.add_subplot(gs[1, 1])
+    ax4.set_xlim(0, 14)
+    ax4.set_ylim(0, 6)
+    ax4.axis('off')
+    
+    boxes = [
+        ((0.5, 2), 2, 2, '#ecf0f1', 'Input\nPekerja: 21-dim\nOthers: 1-dim'),
+        ((3, 2), 2, 2, '#ffeaa7', 'Linear\nProjection\n→ 64-dim'),
+        ((5.5, 1.5), 2, 3, '#1abc9c', 'HGTConv 1\n4 Heads\nType-Specific'),
+        ((8, 2), 2, 2, '#1abc9c', 'HGTConv 2\n4 Heads'),
+        ((10.5, 2), 2, 2, '#55efc4', 'Linear\n64 → 1\nSigmoid'),
+    ]
+    
+    for (x, y), w, h, color, text in boxes:
+        rect = Rect((x, y), w, h, facecolor=color, edgecolor='black', linewidth=2, alpha=0.8)
+        ax4.add_patch(rect)
+        ax4.text(x + w/2, y + h/2, text, ha='center', va='center', fontsize=8, fontweight='bold')
+    
+    arrows = [(2.5, 3), (5, 3), (7.5, 3), (10, 3)]
+    for x, y in arrows:
+        ax4.annotate('', xy=(x + 0.5, y), xytext=(x, y), 
+                     arrowprops=dict(arrowstyle='->', lw=2, color='#34495e'))
+    
+    ax4.text(6.5, 5.2, 'HGT Architecture', fontsize=12, fontweight='bold', ha='center')
+    ax4.text(6.5, 0.5, 'Native heterogeneous graph transformer (not to_hetero wrapper)', 
+             fontsize=9, ha='center', style='italic', color='#7f8c8d')
+    
+    plt.suptitle('Figure 6: HGT Model Deep Dive (BEST AUC: 0.7417)', 
+                 fontsize=16, y=0.98, color='#1abc9c', fontweight='bold')
     plt.savefig(f"{OUTPUT_DIR}/fig06_hgt_deep_dive.png")
     plt.close()
     print("✓ fig06_hgt_deep_dive.png")
@@ -350,36 +406,34 @@ def plot_gat_deep_dive():
     
     data = TRAINING_DATA['GAT']
     
-    # Top Left: Training curves (AUC and F1)
+    # Top Left: Training Loss
     ax1 = fig.add_subplot(gs[0, 0])
-    ax1.plot(data['epochs'], data['val_auc'], 'o-', linewidth=2, markersize=6, 
-             color=COLORS['GAT'], label='Val AUC')
-    ax1.plot(data['epochs'], data['val_f1'], 's--', linewidth=2, markersize=5, 
-             color='#e67e22', alpha=0.7, label='Val F1')
-    best_epoch = np.argmax(data['val_auc']) + 1
-    ax1.axvline(x=best_epoch, color='green', linestyle='--', alpha=0.7, label=f'Best: Ep {best_epoch}')
+    ax1.plot(data['epochs'], data['loss'], 'o-', linewidth=2, markersize=6, color='#e74c3c')
     ax1.set_xlabel('Epoch')
-    ax1.set_ylabel('Score')
-    ax1.set_title('GAT Training Dynamics')
-    ax1.legend(loc='lower right')
-    ax1.set_ylim(0.15, 0.75)
+    ax1.set_ylabel('Training Loss')
+    ax1.set_title('GAT Training Loss')
     ax1.grid(True, alpha=0.3)
     
-    # Top Right: Confusion matrix
+    # Top Right: Val AUC curve
     ax2 = fig.add_subplot(gs[0, 1])
+    ax2.plot(data['epochs'], data['val_auc'], 's-', linewidth=2, markersize=6, color=COLORS['GAT'])
+    best_epoch = np.argmax(data['val_auc']) + 1
+    ax2.axvline(x=best_epoch, color='green', linestyle='--', alpha=0.7, label=f'Best: Ep {best_epoch}')
+    ax2.set_xlabel('Epoch')
+    ax2.set_ylabel('Validation AUC')
+    ax2.set_title('GAT Validation AUC')
+    ax2.legend()
+    ax2.set_ylim(0.5, 0.75)
+    ax2.grid(True, alpha=0.3)
+    
+    # Bottom Left: Metrics + Confusion Matrix
+    ax3 = fig.add_subplot(gs[1, 0])
+    ax3.axis('off')
+    
     cm = CONFUSION_MATRICES['GAT']
-    sns.heatmap(cm, annot=True, fmt='d', cmap='Reds', ax=ax2,
-                xticklabels=['Non-Fraud', 'Fraud'],
-                yticklabels=['Non-Fraud', 'Fraud'],
-                annot_kws={'fontsize': 14}, cbar=False)
     tn, fp, fn, tp = cm[0,0], cm[0,1], cm[1,0], cm[1,1]
     recall = tp / (tp + fn)
     precision = tp / (tp + fp)
-    ax2.set_title(f'Confusion Matrix\n🔴 Recall={recall:.0%} | Precision={precision:.0%}', fontsize=12)
-    
-    # Bottom Left: Metrics summary
-    ax3 = fig.add_subplot(gs[1, 0])
-    ax3.axis('off')
     
     metrics_text = f"""
     ╔══════════════════════════════════════════════════╗
