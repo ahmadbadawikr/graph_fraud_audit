@@ -297,7 +297,7 @@ def plot_complexity_performance():
     print("✓ fig05_complexity_performance.png")
 
 # ============================================================================
-# FIGURE 6: HGT Deep Dive (Best Model)
+# FIGURE 6: HGT Deep Dive (Best AUC Model)
 # ============================================================================
 def plot_hgt_deep_dive():
     fig, axes = plt.subplots(1, 3, figsize=(15, 4.5))
@@ -332,11 +332,65 @@ def plot_hgt_deep_dive():
                 cbar=False)
     ax.set_title(f'HGT Confusion Matrix\n(Test AUC={ALL_MODELS["HGT"]["auc"]:.4f})')
     
-    plt.suptitle('Figure 6: HGT Model Deep Dive (Best Model)', fontsize=14, y=1.05)
+    plt.suptitle('Figure 6: HGT Model Deep Dive (Best AUC: 0.7417)', fontsize=14, y=1.05)
     plt.tight_layout()
     plt.savefig(f"{OUTPUT_DIR}/fig06_hgt_deep_dive.png")
     plt.close()
     print("✓ fig06_hgt_deep_dive.png")
+
+# ============================================================================
+# FIGURE 6B: GAT Deep Dive (Best Recall Model for Fraud Detection)
+# ============================================================================
+def plot_gat_deep_dive():
+    """GAT deep dive - BEST for fraud detection due to 75% recall"""
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4.5))
+    
+    data = TRAINING_DATA['GAT']
+    
+    # Training curve - Val AUC
+    ax = axes[0]
+    ax.plot(data['epochs'], data['val_auc'], 'r-o', linewidth=2, markersize=6, color=COLORS['GAT'])
+    best_epoch = np.argmax(data['val_auc']) + 1
+    ax.axvline(x=best_epoch, color='green', linestyle='--', alpha=0.7, label=f'Best Epoch: {best_epoch}')
+    ax.set_xlabel('Epoch')
+    ax.set_ylabel('Validation AUC')
+    ax.set_title('GAT Validation AUC')
+    ax.legend()
+    ax.set_ylim(0.5, 0.75)
+    ax.grid(True, alpha=0.3)
+    
+    # Val F1 curve
+    ax = axes[1]
+    ax.plot(data['epochs'], data['val_f1'], 's-', linewidth=2, markersize=6, color='#e67e22')
+    ax.set_xlabel('Epoch')
+    ax.set_ylabel('Validation F1')
+    ax.set_title('GAT Validation F1')
+    ax.set_ylim(0.15, 0.25)
+    ax.grid(True, alpha=0.3)
+    
+    # Confusion matrix with recall highlight
+    ax = axes[2]
+    cm = CONFUSION_MATRICES['GAT']
+    
+    # Create heatmap
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Reds', ax=ax,
+                xticklabels=['Non-Fraud', 'Fraud'],
+                yticklabels=['Non-Fraud', 'Fraud'],
+                cbar=False)
+    
+    # Calculate metrics
+    tn, fp, fn, tp = cm[0,0], cm[0,1], cm[1,0], cm[1,1]
+    recall = tp / (tp + fn)
+    precision = tp / (tp + fp)
+    
+    ax.set_title(f'GAT Confusion Matrix\n🔴 Recall={recall:.0%} (BEST!) | Precision={precision:.0%}')
+    
+    plt.suptitle('Figure 6B: GAT Model Deep Dive (BEST for Fraud Detection - 75% Recall)', 
+                 fontsize=14, y=1.05, color='#e74c3c', fontweight='bold')
+    plt.tight_layout()
+    plt.savefig(f"{OUTPUT_DIR}/fig06b_gat_deep_dive.png")
+    plt.close()
+    print("✓ fig06b_gat_deep_dive.png")
 
 # ============================================================================
 # FIGURE 7: 7_train_gnn_standalone.py Results (SAGE/GAT/Transformer)
@@ -751,7 +805,8 @@ def main():
     plot_all_confusion_matrices()     # Fig 3
     plot_precision_recall_all()       # Fig 4
     plot_complexity_performance()     # Fig 5
-    plot_hgt_deep_dive()              # Fig 6
+    plot_hgt_deep_dive()              # Fig 6 - Best AUC
+    plot_gat_deep_dive()              # Fig 6B - Best Recall (Fraud Detection!)
     plot_script7_comparison()         # Fig 7
     plot_v2_v3_comparison()           # Fig 8
     plot_ensemble_hybrid()            # Fig 9
@@ -765,7 +820,7 @@ def main():
     plot_model_selection_guide()      # Fig 15 - Decision guide
     
     print("\n" + "=" * 60)
-    print("✅ ALL 15 FIGURES GENERATED")
+    print("✅ ALL 16 FIGURES GENERATED")
     print("=" * 60)
     print("\n📊 FOR FRAUD DETECTION:")
     print(f"  Best Recall (catch fraudsters): GAT (75%)")
