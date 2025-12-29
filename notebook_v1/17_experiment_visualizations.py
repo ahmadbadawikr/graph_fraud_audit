@@ -343,51 +343,96 @@ def plot_hgt_deep_dive():
 # ============================================================================
 def plot_gat_deep_dive():
     """GAT deep dive - BEST for fraud detection due to 75% recall"""
-    fig, axes = plt.subplots(1, 3, figsize=(15, 4.5))
+    fig = plt.figure(figsize=(16, 10))
+    
+    # Create 2x2 grid
+    gs = fig.add_gridspec(2, 2, hspace=0.3, wspace=0.3)
     
     data = TRAINING_DATA['GAT']
     
-    # Training curve - Val AUC
-    ax = axes[0]
-    ax.plot(data['epochs'], data['val_auc'], 'r-o', linewidth=2, markersize=6, color=COLORS['GAT'])
+    # Top Left: Training curves (AUC and F1)
+    ax1 = fig.add_subplot(gs[0, 0])
+    ax1.plot(data['epochs'], data['val_auc'], 'o-', linewidth=2, markersize=6, 
+             color=COLORS['GAT'], label='Val AUC')
+    ax1.plot(data['epochs'], data['val_f1'], 's--', linewidth=2, markersize=5, 
+             color='#e67e22', alpha=0.7, label='Val F1')
     best_epoch = np.argmax(data['val_auc']) + 1
-    ax.axvline(x=best_epoch, color='green', linestyle='--', alpha=0.7, label=f'Best Epoch: {best_epoch}')
-    ax.set_xlabel('Epoch')
-    ax.set_ylabel('Validation AUC')
-    ax.set_title('GAT Validation AUC')
-    ax.legend()
-    ax.set_ylim(0.5, 0.75)
-    ax.grid(True, alpha=0.3)
+    ax1.axvline(x=best_epoch, color='green', linestyle='--', alpha=0.7, label=f'Best: Ep {best_epoch}')
+    ax1.set_xlabel('Epoch')
+    ax1.set_ylabel('Score')
+    ax1.set_title('GAT Training Dynamics')
+    ax1.legend(loc='lower right')
+    ax1.set_ylim(0.15, 0.75)
+    ax1.grid(True, alpha=0.3)
     
-    # Val F1 curve
-    ax = axes[1]
-    ax.plot(data['epochs'], data['val_f1'], 's-', linewidth=2, markersize=6, color='#e67e22')
-    ax.set_xlabel('Epoch')
-    ax.set_ylabel('Validation F1')
-    ax.set_title('GAT Validation F1')
-    ax.set_ylim(0.15, 0.25)
-    ax.grid(True, alpha=0.3)
-    
-    # Confusion matrix with recall highlight
-    ax = axes[2]
+    # Top Right: Confusion matrix
+    ax2 = fig.add_subplot(gs[0, 1])
     cm = CONFUSION_MATRICES['GAT']
-    
-    # Create heatmap
-    sns.heatmap(cm, annot=True, fmt='d', cmap='Reds', ax=ax,
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Reds', ax=ax2,
                 xticklabels=['Non-Fraud', 'Fraud'],
                 yticklabels=['Non-Fraud', 'Fraud'],
-                cbar=False)
-    
-    # Calculate metrics
+                annot_kws={'fontsize': 14}, cbar=False)
     tn, fp, fn, tp = cm[0,0], cm[0,1], cm[1,0], cm[1,1]
     recall = tp / (tp + fn)
     precision = tp / (tp + fp)
+    ax2.set_title(f'Confusion Matrix\n🔴 Recall={recall:.0%} | Precision={precision:.0%}', fontsize=12)
     
-    ax.set_title(f'GAT Confusion Matrix\n🔴 Recall={recall:.0%} (BEST!) | Precision={precision:.0%}')
+    # Bottom Left: Metrics summary
+    ax3 = fig.add_subplot(gs[1, 0])
+    ax3.axis('off')
+    
+    metrics_text = f"""
+    ╔══════════════════════════════════════════════════╗
+    ║          GAT PERFORMANCE METRICS                 ║
+    ╠══════════════════════════════════════════════════╣
+    ║  Test AUC:       {ALL_MODELS['GAT']['auc']:.4f}                        ║
+    ║  Test F1:        {ALL_MODELS['GAT']['f1']:.4f}                        ║
+    ║  Recall:         {ALL_MODELS['GAT']['recall']:.0%} (BEST!)                    ║
+    ║  Precision:      {ALL_MODELS['GAT']['precision']:.0%}                          ║
+    ║  Parameters:     {ALL_MODELS['GAT']['params']:,}                       ║
+    ║  Epochs:         10                              ║
+    ╠══════════════════════════════════════════════════╣
+    ║  🎯 WHY GAT IS BEST FOR FRAUD DETECTION:         ║
+    ║  • Catches 75% of fraudsters (58/77)             ║
+    ║  • Only misses 19 fraud cases                    ║
+    ║  • Attention focuses on suspicious neighbors     ║
+    ╚══════════════════════════════════════════════════╝
+    """
+    ax3.text(0.5, 0.5, metrics_text, fontsize=10, ha='center', va='center',
+             transform=ax3.transAxes, family='monospace',
+             bbox=dict(boxstyle='round', facecolor='#ffebee', edgecolor='#e74c3c', linewidth=2))
+    
+    # Bottom Right: Architecture diagram
+    ax4 = fig.add_subplot(gs[1, 1])
+    ax4.set_xlim(0, 12)
+    ax4.set_ylim(0, 6)
+    ax4.axis('off')
+    
+    # Architecture boxes
+    boxes = [
+        ((0.5, 2), 2, 2, '#ecf0f1', 'Input\nPekerja: 21-dim\nOthers: 1-dim'),
+        ((3, 2), 2, 2, '#e74c3c', 'GATConv 1\n(Attention)\nDropout=0.3'),
+        ((5.5, 2), 2, 2, '#e74c3c', 'GATConv 2\n(Attention)\nDropout=0.3'),
+        ((8, 2), 2, 2, '#55efc4', 'Linear\n32 → 1\nSigmoid'),
+    ]
+    
+    for (x, y), w, h, color, text in boxes:
+        rect = Rect((x, y), w, h, facecolor=color, edgecolor='black', linewidth=2, alpha=0.8)
+        ax4.add_patch(rect)
+        ax4.text(x + w/2, y + h/2, text, ha='center', va='center', fontsize=9, fontweight='bold')
+    
+    # Arrows
+    arrows = [(2.5, 3), (5, 3), (7.5, 3)]
+    for x, y in arrows:
+        ax4.annotate('', xy=(x + 0.5, y), xytext=(x, y), 
+                     arrowprops=dict(arrowstyle='->', lw=2, color='#34495e'))
+    
+    ax4.text(5.25, 5.2, 'GAT Architecture', fontsize=12, fontweight='bold', ha='center')
+    ax4.text(5.25, 0.5, 'to_hetero wrapper converts to heterogeneous graph', 
+             fontsize=9, ha='center', style='italic', color='#7f8c8d')
     
     plt.suptitle('Figure 6B: GAT Model Deep Dive (BEST for Fraud Detection - 75% Recall)', 
-                 fontsize=14, y=1.05, color='#e74c3c', fontweight='bold')
-    plt.tight_layout()
+                 fontsize=16, y=0.98, color='#c0392b', fontweight='bold')
     plt.savefig(f"{OUTPUT_DIR}/fig06b_gat_deep_dive.png")
     plt.close()
     print("✓ fig06b_gat_deep_dive.png")
