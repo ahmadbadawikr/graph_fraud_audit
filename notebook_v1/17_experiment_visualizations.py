@@ -36,9 +36,9 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 # ============================================================================
 
 ALL_MODELS = {
-    'SAGE': {'auc': 0.6993, 'f1': 0.2434, 'precision': 0.16, 'recall': 0.45, 'params': 23205, 'script': '7_train_gnn_standalone.py'},
-    'GAT': {'auc': 0.7139, 'f1': 0.2670, 'precision': 0.17, 'recall': 0.62, 'params': 24485, 'script': '7_train_gnn_standalone.py'},
-    'Transformer': {'auc': 0.6803, 'f1': 0.2292, 'precision': 0.15, 'recall': 0.53, 'params': 47525, 'script': '7_train_gnn_standalone.py'},
+    'SAGE': {'auc': 0.7043, 'f1': 0.2486, 'precision': 0.15, 'recall': 0.57, 'params': 23205, 'script': '7_train_gnn_standalone.py'},
+    'GAT': {'auc': 0.7067, 'f1': 0.2489, 'precision': 0.15, 'recall': 0.75, 'params': 24485, 'script': '7_train_gnn_standalone.py'},
+    'Transformer': {'auc': 0.7164, 'f1': 0.2636, 'precision': 0.20, 'recall': 0.36, 'params': 47525, 'script': '7_train_gnn_standalone.py'},
     'V2 (3-layer)': {'auc': 0.7046, 'f1': 0.2559, 'precision': 0.15, 'recall': 0.67, 'params': 1028549, 'script': '9_transformer_v2.py'},
     'V3 (Regularized)': {'auc': 0.6078, 'f1': 0.1961, 'precision': 0.19, 'recall': 0.18, 'params': 101477, 'script': '10_transformer_v3.py'},
     'Basic': {'auc': 0.7003, 'f1': 0.2637, 'precision': 0.18, 'recall': 0.44, 'params': 6440, 'script': '12_graph_transformer_basic.py'},
@@ -48,11 +48,11 @@ ALL_MODELS = {
     'Hybrid': {'auc': 0.6605, 'f1': 0.1874, 'precision': 0.11, 'recall': 0.63, 'params': None, 'script': '15_hybrid_gnn_xgboost.py'},
 }
 
-# Confusion matrices from logs (20-epoch results for SAGE/GAT/Transformer)
+# Confusion matrices from logs (10-epoch results)
 CONFUSION_MATRICES = {
-    'SAGE': np.array([[671, 187], [44, 36]]),  # 20 epochs
-    'GAT': np.array([[607, 251], [30, 50]]),   # 20 epochs - 62% recall
-    'Transformer': np.array([[629, 233], [36, 40]]),  # 20 epochs
+    'SAGE': np.array([[621, 240], [33, 44]]),
+    'GAT': np.array([[523, 338], [19, 58]]),   # 75% recall - BEST for fraud!
+    'Transformer': np.array([[747, 114], [49, 28]]),
     'V2 (3-layer)': np.array([[570, 289], [26, 53]]),
     'V3 (Regularized)': np.array([[799, 60], [65, 14]]),  # Based on 0.18 recall, 0.19 precision
     'Basic': np.array([[670, 178], [50, 40]]),  # Based on 0.44 recall, 0.18 precision
