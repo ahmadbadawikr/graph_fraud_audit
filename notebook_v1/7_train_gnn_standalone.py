@@ -36,7 +36,7 @@ print(f"Device: {DEVICE}")
 # ============================================================================
 BATCH_SIZE = 512
 LR = 0.001
-EPOCHS = 10
+EPOCHS = 20
 HIDDEN_DIM = 32
 HEADS = 1
 
