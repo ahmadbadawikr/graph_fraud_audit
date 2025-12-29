@@ -581,6 +581,162 @@ def plot_hgt_architecture():
     print("✓ fig12_hgt_architecture.png")
 
 # ============================================================================
+# FIGURE 13: FRAUD DETECTION - Recall Ranking (Most Important for Fraud!)
+# ============================================================================
+def plot_fraud_recall_ranking():
+    """Key figure for fraud detection - ranks models by recall (catching fraudsters)"""
+    fig, ax = plt.subplots(figsize=(12, 7))
+    
+    # Sort models by recall (descending)
+    sorted_models = sorted(ALL_MODELS.items(), key=lambda x: x[1]['recall'], reverse=True)
+    models = [m[0] for m in sorted_models]
+    recalls = [m[1]['recall'] for m in sorted_models]
+    precisions = [m[1]['precision'] for m in sorted_models]
+    
+    x = np.arange(len(models))
+    width = 0.35
+    
+    # Colors: green for high recall, red for low recall
+    recall_colors = ['#27ae60' if r >= 0.5 else '#f39c12' if r >= 0.3 else '#e74c3c' for r in recalls]
+    
+    bars1 = ax.bar(x - width/2, recalls, width, label='Recall (Fraudsters Caught)', color=recall_colors, edgecolor='black')
+    bars2 = ax.bar(x + width/2, precisions, width, label='Precision (Correct Flags)', color='#3498db', alpha=0.7, edgecolor='black')
+    
+    # Add value labels
+    for bar, val in zip(bars1, recalls):
+        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.02, 
+                f'{val:.0%}', ha='center', fontsize=9, fontweight='bold')
+    
+    ax.set_ylabel('Score')
+    ax.set_title('🔴 FRAUD DETECTION: Models Ranked by Recall\n(Higher Recall = Catches More Fraudsters)', fontsize=14, fontweight='bold')
+    ax.set_xticks(x)
+    ax.set_xticklabels(models, rotation=45, ha='right', fontsize=9)
+    ax.legend(loc='upper right')
+    ax.set_ylim(0, 0.9)
+    
+    # Add annotation for best
+    ax.annotate('BEST for\nFraud Detection', xy=(0, recalls[0] + 0.05), fontsize=10, 
+                ha='center', color='#27ae60', fontweight='bold')
+    
+    ax.axhline(y=0.5, color='gray', linestyle='--', alpha=0.5, label='50% threshold')
+    ax.grid(True, alpha=0.3, axis='y')
+    
+    plt.tight_layout()
+    plt.savefig(f"{OUTPUT_DIR}/fig13_fraud_recall_ranking.png")
+    plt.close()
+    print("✓ fig13_fraud_recall_ranking.png")
+
+# ============================================================================
+# FIGURE 14: FRAUD DETECTION - Precision vs Recall Tradeoff with Context
+# ============================================================================
+def plot_fraud_tradeoff():
+    """Shows the precision-recall tradeoff with fraud detection context"""
+    fig, ax = plt.subplots(figsize=(12, 8))
+    
+    for model, data in ALL_MODELS.items():
+        # Size based on AUC, color based on recall
+        size = 100 + data['auc'] * 400
+        if data['recall'] >= 0.6:
+            color = '#27ae60'  # Green - good recall
+            marker = '*'
+        elif data['recall'] >= 0.4:
+            color = '#f39c12'  # Orange - moderate
+            marker = 's'
+        else:
+            color = '#e74c3c'  # Red - low recall
+            marker = 'o'
+        
+        ax.scatter(data['recall'], data['precision'], s=size, c=color, marker=marker,
+                   edgecolors='black', linewidth=1.5, alpha=0.8, label=f"{model}")
+        ax.annotate(model, (data['recall'] + 0.01, data['precision'] + 0.008), fontsize=8)
+    
+    # Add zones
+    ax.axvspan(0.6, 0.85, alpha=0.1, color='green', label='High Recall Zone')
+    ax.axhspan(0.2, 0.3, alpha=0.1, color='blue', label='High Precision Zone')
+    
+    ax.set_xlabel('Recall (% of Fraudsters Caught)', fontsize=12)
+    ax.set_ylabel('Precision (% of Flags that are Fraud)', fontsize=12)
+    ax.set_title('🎯 Fraud Detection: Precision vs Recall Trade-off\n(Green=High Recall ✓, Orange=Moderate, Red=Low Recall ✗)', fontsize=13, fontweight='bold')
+    ax.set_xlim(0.1, 0.85)
+    ax.set_ylim(0.08, 0.30)
+    ax.grid(True, alpha=0.3)
+    
+    # Add context annotations
+    ax.text(0.72, 0.12, 'BEST for catching\nfraudsters', fontsize=9, ha='center', 
+            color='#27ae60', fontweight='bold', style='italic')
+    ax.text(0.25, 0.26, 'BEST for reducing\nfalse alarms', fontsize=9, ha='center', 
+            color='#3498db', fontweight='bold', style='italic')
+    
+    plt.tight_layout()
+    plt.savefig(f"{OUTPUT_DIR}/fig14_fraud_tradeoff.png")
+    plt.close()
+    print("✓ fig14_fraud_tradeoff.png")
+
+# ============================================================================
+# FIGURE 15: FRAUD DETECTION - Model Selection Guide
+# ============================================================================
+def plot_model_selection_guide():
+    """Visual guide for model selection based on fraud detection priorities"""
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+    
+    # Left: Horizontal bar chart - models by priority
+    ax = axes[0]
+    
+    # Sort by recall
+    sorted_models = sorted(ALL_MODELS.items(), key=lambda x: x[1]['recall'], reverse=True)
+    models = [m[0] for m in sorted_models][:6]  # Top 6
+    recalls = [m[1]['recall'] for m in sorted_models][:6]
+    
+    colors = ['#27ae60', '#2ecc71', '#f1c40f', '#f39c12', '#e67e22', '#e74c3c']
+    y_pos = np.arange(len(models))
+    
+    bars = ax.barh(y_pos, recalls, color=colors, edgecolor='black')
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels(models, fontsize=10)
+    ax.set_xlabel('Recall (% Fraudsters Caught)')
+    ax.set_title('Top 6 Models by Recall\n(For Fraud Detection)', fontsize=12, fontweight='bold')
+    ax.set_xlim(0, 0.85)
+    
+    # Add percentage labels
+    for bar, val in zip(bars, recalls):
+        ax.text(val + 0.02, bar.get_y() + bar.get_height()/2, 
+                f'{val:.0%}', va='center', fontsize=10, fontweight='bold')
+    
+    # Right: Decision matrix
+    ax = axes[1]
+    ax.axis('off')
+    
+    ax.text(0.5, 0.95, '📋 Model Selection Decision Matrix', fontsize=14, fontweight='bold', 
+            ha='center', transform=ax.transAxes)
+    
+    decision_text = """
+    ┌─────────────────────────────────────────────────────┐
+    │ YOUR PRIORITY          → USE THIS MODEL            │
+    ├─────────────────────────────────────────────────────┤
+    │ 🔴 "Never miss fraud"   → GAT (75% recall)         │
+    │    High cost of missed fraud                       │
+    │                                                    │
+    │ 🟡 "Balanced approach"  → V2 or SAGE (57-67%)      │
+    │    Some tolerance for both errors                  │
+    │                                                    │
+    │ 🟢 "Reduce false alarms" → HGT (25% precision)     │
+    │    High cost of investigations                     │
+    │                                                    │
+    │ 🏆 "Two-stage system"   → GAT → HGT                │
+    │    Best of both worlds (recommended)               │
+    └─────────────────────────────────────────────────────┘
+    """
+    
+    ax.text(0.5, 0.45, decision_text, fontsize=10, ha='center', va='center',
+            transform=ax.transAxes, family='monospace',
+            bbox=dict(boxstyle='round', facecolor='#ecf0f1', edgecolor='#34495e', linewidth=2))
+    
+    plt.tight_layout()
+    plt.savefig(f"{OUTPUT_DIR}/fig15_model_selection_guide.png")
+    plt.close()
+    print("✓ fig15_model_selection_guide.png")
+
+# ============================================================================
 # MAIN
 # ============================================================================
 def main():
@@ -589,6 +745,7 @@ def main():
     print("=" * 60)
     print(f"Output: {OUTPUT_DIR}\n")
     
+    # Original figures
     plot_complete_comparison()        # Fig 1
     plot_individual_training()        # Fig 2
     plot_all_confusion_matrices()     # Fig 3
@@ -602,11 +759,20 @@ def main():
     plot_graph_schema()               # Fig 11
     plot_hgt_architecture()           # Fig 12
     
+    # NEW: Fraud detection focused figures
+    plot_fraud_recall_ranking()       # Fig 13 - KEY FOR FRAUD
+    plot_fraud_tradeoff()             # Fig 14 - Tradeoff analysis
+    plot_model_selection_guide()      # Fig 15 - Decision guide
+    
     print("\n" + "=" * 60)
-    print("✅ ALL 12 FIGURES GENERATED")
+    print("✅ ALL 15 FIGURES GENERATED")
     print("=" * 60)
-    print(f"\nBest Model: HGT (AUC=0.7417, F1=0.2976)")
-    print(f"Worst Model: V3 (AUC=0.6078, F1=0.1961)")
+    print("\n📊 FOR FRAUD DETECTION:")
+    print(f"  Best Recall (catch fraudsters): GAT (75%)")
+    print(f"  Best Precision (reduce false alarms): HGT (25%)")
+    print(f"  Best AUC (overall ranking): HGT (0.7417)")
+    print(f"  Worst Model: V3 (AUC=0.6078, Recall=18%)")
 
 if __name__ == "__main__":
     main()
+

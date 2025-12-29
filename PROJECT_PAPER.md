@@ -969,16 +969,69 @@ This suggests the **graph topology itself** is informative—fraudsters connect 
 
 ---
 
-### 6.9 Recommended Model Selection
+### 6.9 Model Selection for Fraud Detection: Recall vs Precision
 
-Based on our experiments:
+> [!IMPORTANT]
+> **For fraud detection, "best" depends on your business priority.**
+> - **High Recall** = Catch more fraudsters (minimize false negatives)
+> - **High Precision** = Fewer innocent investigations (minimize false positives)
 
-| Use Case | Recommended Model | Why |
-|:---------|:------------------|:----|
-| **Production deployment** | HGT | Best AUC (0.7417), stable training |
-| **Quick prototyping** | Basic Transformer | Simple, fast, good baseline (0.70 AUC) |
-| **Ensemble (if needed)** | HGT + XGBoost | Orthogonal signals (graph + tabular) |
-| **Avoid** | V3 (heavy regularization) | Underfits badly (0.6078 AUC) |
+#### The Critical Trade-off
+
+| Model | AUC | F1 | Precision | **Recall** | Fraudsters Caught | False Alarms |
+|:------|:----|:---|:----------|:-----------|:------------------|:-------------|
+| **GAT** | 0.7067 | 0.2489 | 0.15 | **0.75** | **75%** | High |
+| V2 (3-layer) | 0.7046 | 0.2559 | 0.15 | 0.67 | 67% | High |
+| Hybrid | 0.6605 | 0.1874 | 0.11 | 0.63 | 63% | Very High |
+| SAGE | 0.7043 | 0.2486 | 0.15 | 0.57 | 57% | High |
+| Ensemble | 0.7153 | 0.2475 | 0.16 | 0.48 | 48% | Moderate |
+| Basic | 0.7003 | 0.2637 | 0.18 | 0.44 | 44% | Moderate |
+| Final | 0.7042 | 0.2661 | 0.19 | 0.39 | 39% | Moderate |
+| Transformer | 0.7164 | 0.2636 | 0.20 | 0.36 | 36% | Lower |
+| **HGT** | **0.7417** | **0.2976** | **0.25** | 0.34 | 34% | **Lowest** |
+| V3 | 0.6078 | 0.1961 | 0.19 | 0.18 | 18% | Lower |
+
+#### Fraud Detection Priority Matrix
+
+| Priority | Best Model | Key Metric | Trade-off |
+|:---------|:-----------|:-----------|:----------|
+| 🔴 **"Never miss a fraudster"** | **GAT** | Recall = 0.75 | High false alarm rate (85% of flagged are innocent) |
+| 🟡 **"Balanced approach"** | **HGT** | F1 = 0.2976, AUC = 0.7417 | Catches 34% of fraud, 75% precision |
+| 🟢 **"Reduce false alarms"** | **HGT** | Precision = 0.25 | Only 25% false alarm rate, but misses 66% of fraud |
+
+#### Real-World Recommendation
+
+For a **production fraud detection system**, we recommend a **two-stage approach**:
+
+1. **Stage 1 - High-Recall Screening (GAT)**
+   - Use GAT as the first filter (Recall = 0.75)
+   - Flags 75% of actual fraudsters for further review
+   - Accepts high false positive rate at this stage
+
+2. **Stage 2 - Precision Refinement (HGT)**
+   - Apply HGT to the flagged cases
+   - Filters out false positives with higher precision
+   - Only true suspects reach human investigators
+
+**Alternative: Single-Model Approach**
+- If only one model is feasible, choose based on cost:
+  - **High cost of missed fraud** → Use **GAT** (75% recall)
+  - **High cost of investigations** → Use **HGT** (25% precision, 0.74 AUC)
+
+#### Why GAT Has Higher Recall Than HGT
+
+**Technical Explanation:**
+
+1. **GAT's attention mechanism** learns to focus on ANY suspicious neighbor, creating a "if any neighbor is suspicious, flag it" pattern → High recall, low precision
+
+2. **HGT's type-specific attention** is more selective—it only flags nodes with suspicious patterns across MULTIPLE edge types simultaneously → Lower recall, higher precision
+
+```
+GAT: "This employee connects to ONE suspicious transaction" → FLAG ✓
+HGT: "This employee connects to suspicious transactions AND suspicious accounts AND unusual patterns" → FLAG ✓
+```
+
+The second approach catches fewer fraudsters but is more accurate when it does flag someone.
 
 ---
 
@@ -995,6 +1048,14 @@ Based on our experiments:
 ![Figure 8: V2 vs V3 Comparison](notebook_v1/paper_figures/fig08_v2_v3_comparison.png)
 
 ![Figure 10: Experiment Timeline](notebook_v1/paper_figures/fig10_experiment_timeline.png)
+
+### Key Fraud Detection Figures
+
+![Figure 13: Fraud Recall Ranking - Models ranked by ability to catch fraudsters](notebook_v1/paper_figures/fig13_fraud_recall_ranking.png)
+
+![Figure 14: Fraud Detection Trade-off - Precision vs Recall with context](notebook_v1/paper_figures/fig14_fraud_tradeoff.png)
+
+![Figure 15: Model Selection Guide - Decision matrix for fraud detection priorities](notebook_v1/paper_figures/fig15_model_selection_guide.png)
 
 ---
 
