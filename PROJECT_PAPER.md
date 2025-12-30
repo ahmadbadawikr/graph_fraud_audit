@@ -453,13 +453,213 @@ PyTorch's `mps` backend enables GPU acceleration on Mac. However, it behaves dif
 2.  **`num_workers=0`**: The standard practice of using multi-process data loading (`num_workers=4`) often causes significant overhead on macOS due to the way Python forks processes. The optimization guide recommends `num_workers=0` (main process loading), leveraging PyG's refined C++ sampling routines which are efficient enough to not block the training loop significantly on this architecture.
 3.  **Pin Memory**: `pin_memory=True` (Page-Locked Memory) is strictly enforced to facilitate zero-copy or fast-path data access for the Metal Performance Shaders.
 
+## 6. The Research Journey: A Narrative of Discovery
+
+> *"The path to the optimal model was not a straight line—it was a winding road of hypotheses, experiments, failures, and insights. This section tells that story."*
+
+### 6.0 The Beginning: From Problem to First Model
+
+When we first approached this fraud detection problem, we faced a fundamental question: **Can graph structure improve fraud detection over traditional tabular methods?**
+
+Financial fraud detection has historically relied on rule-based systems and feature-engineered classifiers. An employee with suspicious behavior might be flagged based on their transaction amounts, working hours, or account activity. But these methods miss a crucial dimension: **who you're connected to matters as much as who you are.**
+
+Our hypothesis was simple but powerful:
+
+> **Hypothesis**: Fraudsters don't operate in isolation. They form networks—sharing accounts, facilitating transactions, and creating patterns that are invisible in tabular data but emerge clearly in graph structure.
+
 ---
 
-## 6. Experimental Evolution and Detailed Results
+### 6.1 The First Surprise: Simple Models Work Remarkably Well
 
-The project followed a rigorous scientific method to arrive at the final champion model. This section provides comprehensive documentation of each experiment, including detailed configurations, quantitative metrics, confusion matrices, and analysis.
+Our journey began with a baseline: a minimal 2-layer Graph Transformer with just 6,440 parameters. We expected this to be a "sanity check" before building something more sophisticated.
 
-### 6.0 Dataset Statistics
+The result surprised us:
+
+| Model | Parameters | Test AUC |
+|:------|:-----------|:---------|
+| Basic 2-layer Transformer | 6,440 | 0.7003 |
+
+**Key Insight #1**: The fraud signal exists in the graph topology itself. Even a simple model that aggregates neighbor information can detect fraud at 70% AUC—significantly better than random (50%).
+
+This told us something profound: **the graph structure is informative**. Fraudsters, regardless of their individual attributes, connect to suspicious patterns in ways that a GNN can learn.
+
+---
+
+### 6.2 The Homogeneous vs Heterogeneous Debate
+
+Armed with confidence that GNNs could work, we tested three classic architectures using PyTorch Geometric's `to_hetero` wrapper:
+
+| Model | Core Mechanism | Test AUC | Test Recall |
+|:------|:---------------|:---------|:------------|
+| GraphSAGE | Mean aggregation | 0.7043 | 57% |
+| GAT | Learned attention | 0.7067 | **75%** |
+| TransformerConv | Multi-head attention | 0.7164 | 36% |
+
+**The Revelation**: All three achieved similar AUC (~0.70-0.72), but their **recall** differed dramatically!
+
+- **GAT caught 75% of fraudsters** but at the cost of many false positives
+- **TransformerConv** was more precise but missed 64% of fraud cases
+
+**Key Insight #2**: For fraud detection, recall matters more than AUC. Missing a fraudster (false negative) is often more costly than investigating an innocent employee (false positive).
+
+This insight shaped our entire approach: **we would optimize for catching fraudsters first, then refine precision.**
+
+---
+
+### 6.3 The Depth Experiment: Why More Layers Hurt
+
+Conventional deep learning wisdom suggests deeper networks learn better representations. We tested this with a 3-layer TransformerConv (V2):
+
+| Depth | Parameters | Test AUC |
+|:------|:-----------|:---------|
+| 2 layers | 47,525 | 0.7164 |
+| 3 layers | 1,028,549 | 0.7046 |
+
+**The result was counterintuitive**: 3 layers performed *worse* despite having 20x more parameters.
+
+**Why?** The phenomenon is called **oversmoothing**:
+
+With each message-passing layer, node representations become more similar because they aggregate from overlapping neighborhoods. In a densely connected financial graph:
+- Layer 1: Each node knows its direct neighbors
+- Layer 2: Each node knows its 2-hop neighborhood
+- Layer 3: Each node's representation includes *most of the graph*
+
+By layer 3, all nodes converge toward the graph mean, losing their discriminative power.
+
+**Key Insight #3**: More depth ≠ better. For fraud detection on dense graphs, 2 layers is optimal.
+
+---
+
+### 6.4 The Regularization Disaster
+
+After the depth experiment, we hypothesized that the 3-layer model was overfitting. We applied aggressive regularization (V3):
+
+- Dropout: 0.5 (50% of neurons zeroed)
+- Weight Decay: 1e-3 (10x typical)
+- Reduced hidden dimension: 32
+
+The result was catastrophic:
+
+| Model | Test AUC | Test Recall |
+|:------|:---------|:------------|
+| V3 (Heavy Regularization) | **0.6078** | **18%** |
+
+**This was our worst model.** It caught only 18% of fraudsters—practically useless.
+
+**What went wrong?** We overcorrected. The model was so constrained that it couldn't learn the fraud patterns at all. The training curve oscillated wildly, never converging:
+
+```
+Val AUC fluctuated: 0.54 → 0.62 → 0.75 → 0.64 → 0.66 → 0.70 → 0.68
+```
+
+**Key Insight #4**: There's an optimal regularization point. More regularization ≠ better generalization. V3 underfitted badly.
+
+---
+
+### 6.5 The Breakthrough: Native Heterogeneous Attention (HGT)
+
+After the V3 failure, we asked: *"What if the problem isn't depth or regularization, but the `to_hetero` wrapper itself?"*
+
+The `to_hetero` wrapper converts homogeneous GNNs to work on heterogeneous graphs, but it has a fundamental limitation: it applies the **same aggregation function** to all edge types.
+
+In our financial graph, the edge `debit` (money flowing out) carries different fraud signals than `is_pekerja` (employment relationship). But `to_hetero` treats them identically.
+
+We switched to **Heterogeneous Graph Transformer (HGT)**, which is *natively* designed for heterogeneous graphs:
+
+| Model | Wrapper | Test AUC | Key Difference |
+|:------|:--------|:---------|:---------------|
+| TransformerConv | to_hetero | 0.7164 | Same attention for all edges |
+| **HGT** | Native | **0.7417** | Different attention per edge type |
+
+**HGT achieved the highest AUC** (+0.025 improvement) because it learns:
+- High attention for `debit/credit` edges (money flow = fraud signal)
+- Lower attention for `has_simpanan` edges (account ownership = less informative)
+
+**Key Insight #5**: For heterogeneous graphs, native architectures outperform wrappers. Edge type semantics matter.
+
+---
+
+### 6.6 The Precision-Recall Trade-off: Choosing the Right Model
+
+With HGT achieving the best AUC, we declared victory... until we looked at recall:
+
+| Model | Test AUC | Test Recall | Best For |
+|:------|:---------|:------------|:---------|
+| **HGT** | **0.7417** | 34% | Best overall ranking |
+| **GAT** | 0.7067 | **75%** | Catching fraudsters |
+
+**The dilemma was clear**:
+- HGT ranks well (high AUC) but misses 66% of fraudsters
+- GAT catches 75% of fraudsters but has many false positives
+
+**Key Insight #6**: "Best model" depends on business priority.
+
+For fraud detection, we ultimately recommend:
+
+| Priority | Use Model | Why |
+|:---------|:----------|:----|
+| 🔴 "Never miss fraud" | GAT | 75% recall |
+| 🟡 Balanced | HGT | Best AUC (0.7417) |
+| 🟢 Reduce false alarms | HGT | 25% precision |
+
+**Production Recommendation**: A two-stage approach:
+1. **Stage 1 (GAT)**: High-recall screening—catch 75% of fraudsters
+2. **Stage 2 (HGT)**: Precision refinement—filter false positives
+
+---
+
+### 6.7 The Ensemble Experiment: When Combination Doesn't Help
+
+We also tested an ensemble combining GNN + MLP + XGBoost:
+
+| Component | Weight | Contribution |
+|:----------|:-------|:-------------|
+| GNN | 0.4 | Graph structure |
+| MLP | 0.4 | Tabular features |
+| XGBoost | 0.2 | Tabular features |
+
+**Result**: AUC = 0.7153 (worse than HGT's 0.7417)
+
+**Why?** MLP and XGBoost both learn from the same 21 tabular features. They provide *redundant* signals, not *complementary* ones.
+
+**Key Insight #7**: Ensembles only help when components capture orthogonal information. A better ensemble would be HGT (graph) + XGBoost (tabular).
+
+---
+
+### 6.8 The Training Duration Experiment
+
+Finally, we tested whether more epochs would improve GAT (our high-recall champion):
+
+| Epochs | Test AUC | Test Recall |
+|:-------|:---------|:------------|
+| 10 | 0.7067 | **75%** |
+| 20 | 0.7139 | 62% |
+
+**The trade-off was clear**: More training improved AUC (+0.7%) but *decreased* recall (-13%).
+
+We saved models based on best validation AUC, so the 20-epoch model optimized for ranking ability at the expense of catching fraudsters.
+
+**Key Insight #8**: For fraud detection, optimize for the right metric. We reverted to 10 epochs to preserve GAT's 75% recall.
+
+---
+
+### 6.9 Summary: What We Learned
+
+| Lesson | Insight |
+|:-------|:--------|
+| **Graph structure works** | Even simple GNNs detect fraud patterns invisible in tabular data |
+| **Recall > AUC for fraud** | Missing fraudsters is costlier than false positives |
+| **2 layers is optimal** | Deeper models oversmooth on dense graphs |
+| **Native heterogeneous > Wrappers** | HGT outperforms to_hetero models |
+| **Regularization has limits** | Over-regularization causes underfitting |
+| **Ensemble needs diversity** | Redundant components don't help |
+| **Optimize for the right metric** | Training longer may hurt your priority metric |
+
+---
+
+## 7. Detailed Experimental Results
+
+### 7.0 Dataset Statistics
 
 Before diving into experiments, it's important to understand the dataset characteristics:
 
@@ -478,7 +678,7 @@ Before diving into experiments, it's important to understand the dataset charact
 
 ---
 
-### 6.1 Experiment 1: The Baseline (V1) — `12_graph_transformer_basic.py`
+### 7.1 Experiment 1: The Baseline (V1) — `12_graph_transformer_basic.py`
 
 **Objective**: Establish a minimum viable baseline using a simple Graph Transformer with the `to_hetero` wrapper.
 
@@ -549,7 +749,7 @@ weighted avg       0.88      0.84      0.86     22540
 
 ---
 
-### 6.2 Experiment 2: The "Kitchen Sink" (V2) — `9_transformer_v2.py`
+### 7.2 Experiment 2: The "Kitchen Sink" (V2) — `9_transformer_v2.py`
 
 **Objective**: Drastically increase model capacity to capture more complex fraud patterns.
 
@@ -601,7 +801,7 @@ Where $\mathbf{\bar{h}}$ is the mean embedding across all nodes.
 
 ---
 
-### 6.3 Experiment 3: The Correction (V3) — `10_transformer_v3.py`
+### 7.3 Experiment 3: The Correction (V3) — `10_transformer_v3.py`
 
 **Objective**: Fix the overfitting from V2 through aggressive regularization.
 
@@ -655,7 +855,7 @@ Fraud             987      803
 
 ---
 
-### 6.4 Experiment 4: The Pivot to HGT — `14_train_hgt.py`
+### 7.4 Experiment 4: The Pivot to HGT — `14_train_hgt.py`
 
 **Objective**: Use a natively heterogeneous architecture to leverage edge-type semantics.
 
@@ -722,7 +922,7 @@ weighted avg       0.89      0.82      0.85     22540
 
 ---
 
-### 6.5 Experiment 5: Hybrid Feature Extraction — `15_hybrid_gnn_xgboost.py`
+### 7.5 Experiment 5: Hybrid Feature Extraction — `15_hybrid_gnn_xgboost.py`
 
 **Objective**: Use the GNN as a feature extractor and leverage XGBoost's tabular strength.
 
@@ -779,7 +979,7 @@ weighted avg       0.89      0.82      0.85     22540
 
 ---
 
-### 6.6 Experiment 6: Final Ensemble — `8_final_ensemble_optimization.py`
+### 7.6 Experiment 6: Final Ensemble — `8_final_ensemble_optimization.py`
 
 **Objective**: Create an optimally weighted ensemble of multiple model types.
 
@@ -838,7 +1038,7 @@ weighted avg       0.89      0.80      0.84     22540
 
 ---
 
-### 6.7 Summary: Experimental Progression (Real Results)
+### 7.7 Summary: Experimental Progression (Real Results)
 
 | Experiment | Model | AUC | F1 | Key Note |
 |:-----------|:------|:----|:---|:---------|
@@ -861,7 +1061,7 @@ weighted avg       0.89      0.80      0.84     22540
 
 ---
 
-### 6.8 In-Depth Analysis: Why Each Model Performed This Way
+### 7.8 In-Depth Analysis: Why Each Model Performed This Way
 
 #### Why HGT Won (AUC=0.7417, F1=0.2976)
 
@@ -969,7 +1169,7 @@ This suggests the **graph topology itself** is informative—fraudsters connect 
 
 ---
 
-### 6.9 Model Selection for Fraud Detection: Recall vs Precision
+### 7.9 Model Selection for Fraud Detection: Recall vs Precision
 
 > [!IMPORTANT]
 > **For fraud detection, "best" depends on your business priority.**
@@ -1059,7 +1259,7 @@ The second approach catches fewer fraudsters but is more accurate when it does f
 
 ---
 
-## 7. Conclusion
+## 8. Conclusion
 
 The Graph Fraud Audit project represents a state-of-the-art implementation of Anti-Money Laundering (AML) technology. By systematically converting audit logs into a rich Heterogeneous Graph and applying a Transformer-based architecture, it unveils hidden risk patterns.
 
