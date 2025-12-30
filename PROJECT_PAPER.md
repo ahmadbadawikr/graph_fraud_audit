@@ -1423,21 +1423,30 @@ After extensive experimentation across 10 model architectures, here is our defin
 
 | Your Priority | Recommended Model | Why |
 |:--------------|:------------------|:----|
-| 🔴 **"Never miss fraud"** | **GAT** | 75% recall - catches 3 out of 4 fraudsters |
-| 🟢 **"Minimize false alarms"** | **HGT** | 25% precision - best accuracy among all |
-| 🏆 **"Best of both worlds"** | **GAT → HGT (Two-Stage)** | GAT screens, HGT refines |
-| 📊 **"Balanced approach"** | **Transformer** | 0.7164 AUC with moderate recall |
+| 🔴 **"Never miss fraud"** | **GAT (threshold 0.3)** | 75% recall - catches 3 out of 4 fraudsters |
+| 🟢 **"Minimize false alarms"** | **HGT (threshold 0.5)** | 87.6% accuracy, 25% precision |
+| 📊 **"Balanced approach"** | **HGT (threshold 0.5)** | Best AUC (0.7417) + 73% recall |
+| 🔬 **"Production simplicity"** | **HGT alone** | Single model, easier deployment |
+
+### Two-Stage Pipeline Results
+
+We implemented and tested a two-stage pipeline (GAT → HGT):
+
+| Approach | AUC | Recall | F1 |
+|:---------|:----|:-------|:---|
+| GAT Only (threshold 0.5) | 0.6640 | 63.9% | 0.2255 |
+| HGT Only (threshold 0.5) | 0.6841 | **73.5%** | 0.2243 |
+| Two-Stage (GAT→HGT) | 0.6640 | **73.5%** | 0.2243 |
+
+**Key Finding**: In our experiment, **HGT alone achieved the same recall as the two-stage pipeline!** The added complexity of two stages didn't provide significant benefit.
+
+**Why?** The threshold sensitivity matters more than the architecture. HGT with threshold 0.5 catches 73% of fraudsters. The two-stage approach filtered 42% of candidates but didn't improve final recall.
 
 **Production Recommendation**: 
 ```
-All Employees → [GAT: threshold 0.3] → Suspicious Candidates → [HGT: threshold 0.5] → Confirmed Fraud
-               (75% recall)                                    (high precision)
+For simplicity: Use HGT alone (threshold 0.5) → 73% recall, 87.6% accuracy
+For maximum recall: Use GAT (threshold 0.3) → 75%+ recall, more false positives
 ```
-
-This two-stage pipeline:
-- **Stage 1 (GAT)**: Flags suspicious employees with high recall
-- **Stage 2 (HGT)**: Filters false positives with precision
-- **Result**: ~70% recall + 42% reduction in false positives
 
 ---
 
