@@ -35,7 +35,7 @@ Handling millions of financial transactions requires a robust data engineering s
 ### 2.1 The Schema: A Heterogeneous Graph
 Financial data is inherently **heterogeneous**—it consists of different types of nodes and edges. A homogeneous graph (like a citation network where every node is a `Paper`) would fail to capture the nuances of banking.
 
-![Figure 10: Graph Schema](notebook_v1/paper_figures/fig10_graph_schema.png)
+![Figure 10: Graph Schema](notebook_v1/paper_figures/fig11_graph_schema.png)
 
 **Node Types (Entities):**
 1.  **`Nasabah` (Customer)**: The demographic root.
@@ -346,7 +346,7 @@ class HGT(nn.Module):
 2.  **Node-Type Awareness**: It can learn that `transaksi` nodes should be processed differently than `pekerja` nodes.
 3.  **Flexible Attention**: The relation-specific attention matrix allows the model to weigh "suspicious" relationship types more heavily.
 
-![Figure 11: HGT Architecture](notebook_v1/paper_figures/fig11_hgt_architecture.png)
+![Figure 11: HGT Architecture](notebook_v1/paper_figures/fig12_hgt_architecture.png)
 
 ---
 
@@ -674,7 +674,7 @@ Before diving into experiments, it's important to understand the dataset charact
 
 **Key Challenge**: The severe class imbalance (8.4% fraud) means a naive model predicting "non-fraud" for all cases would achieve 91.6% accuracy but 0% recall on fraud—completely useless for the business objective.
 
-![Figure 7: Experimental Progression Timeline](notebook_v1/paper_figures/fig7_experiment_timeline.png)
+![Figure 7: Experimental Progression Timeline](notebook_v1/paper_figures/fig10_experiment_timeline.png)
 
 ---
 
@@ -745,7 +745,7 @@ weighted avg       0.88      0.84      0.86     22540
 - Moderate recall (38%) catches about 1/3 of actual fraud
 - This serves as the stable baseline for comparison
 
-![Figure 1: Training Curves](notebook_v1/paper_figures/fig1_training_curves.png)
+![Figure 1: Training Curves](notebook_v1/paper_figures/fig02_individual_training.png)
 
 ---
 
@@ -797,7 +797,7 @@ $$
 
 Where $\mathbf{\bar{h}}$ is the mean embedding across all nodes.
 
-![Figure 2: Overfitting Analysis](notebook_v1/paper_figures/fig2_overfitting_analysis.png)
+![Figure 2: Overfitting Analysis](notebook_v1/paper_figures/fig08_v2_v3_comparison.png)
 
 ---
 
@@ -918,7 +918,7 @@ weighted avg       0.89      0.82      0.85     22540
 - Type-aware attention learns that "transfer" edges are more indicative of fraud than "ownership" edges
 - The 4 attention heads capture different fraud signals in parallel
 
-![Figure 4: Confusion Matrices](notebook_v1/paper_figures/fig4_confusion_matrices.png)
+![Figure 4: Confusion Matrices](notebook_v1/paper_figures/fig03_all_confusion_matrices.png)
 
 ---
 
@@ -975,7 +975,7 @@ weighted avg       0.89      0.82      0.85     22540
 - This proves the GNN captures **unique structural information** not present in raw tabular features
 - Hybrid approach combines the best of both worlds
 
-![Figure 7: Feature Importance](notebook_v1/paper_figures/fig7_feature_importance.png)
+![Figure 7: Feature Importance](notebook_v1/paper_figures/fig05_complexity_performance.png)
 
 ---
 
@@ -1004,7 +1004,7 @@ Searching over α (HGT), β (XGBoost), γ (MLP) in steps of 0.1:
 
 **Optimal Weights:** $\alpha = 0.6$, $\beta = 0.3$, $\gamma = 0.1$
 
-![Figure 6: Ensemble Weight Grid Search](notebook_v1/paper_figures/fig6_ensemble_weights.png)
+![Figure 6: Ensemble Weight Grid Search](notebook_v1/paper_figures/fig09_ensemble_hybrid.png)
 
 **Final Ensemble Test Results (Threshold = 0.26):**
 | Metric | Value | Δ vs Best Single (HGT) |
