@@ -678,6 +678,8 @@ Low threshold (0.500):
 **Production Recommendation**: 
 For fraud detection, use threshold **0.3-0.5** to maximize recall. The "optimal" F1 threshold (0.656) misses too many fraudsters.
 
+![Figure 16: Threshold Sensitivity Analysis](notebook_v1/paper_figures/fig16_threshold_sensitivity.png)
+
 ---
 
 ### 6.10 Summary: What We Learned
@@ -1294,6 +1296,103 @@ The second approach catches fewer fraudsters but is more accurate when it does f
 ![Figure 14: Fraud Detection Trade-off - Precision vs Recall with context](notebook_v1/paper_figures/fig14_fraud_tradeoff.png)
 
 ![Figure 15: Model Selection Guide - Decision matrix for fraud detection priorities](notebook_v1/paper_figures/fig15_model_selection_guide.png)
+
+### Threshold Sensitivity & Production Pipeline
+
+![Figure 16: Threshold Sensitivity - Same model, different threshold = 34% vs 73% recall!](notebook_v1/paper_figures/fig16_threshold_sensitivity.png)
+
+**Key Insight**: The classification threshold dramatically affects fraud detection performance. An F1-optimized threshold (0.656) catches only 34% of fraudsters, while a lower threshold (0.5) catches 73%—using the exact same model!
+
+### Comprehensive Model Comparison
+
+![Figure 17: Comprehensive Metrics Heatmap - All 10 models × 5 metrics](notebook_v1/paper_figures/fig17_comprehensive_metrics.png)
+
+**Full Metrics Table (All 10 Models):**
+
+| Model | AUC | Accuracy | F1 | Precision | Recall |
+|:------|:----|:---------|:---|:----------|:-------|
+| **HGT** | **0.7417** | **87.6%** | **0.2976** | **25%** | 34% |
+| Transformer | 0.7164 | 82.6% | 0.2636 | 20% | 36% |
+| Ensemble | 0.7153 | 75.9% | 0.2475 | 16% | 48% |
+| **GAT** | 0.7067 | 61.9% | 0.2489 | 15% | **75%** |
+| V2 (3-layer) | 0.7046 | 66.4% | 0.2559 | 15% | 67% |
+| SAGE | 0.7043 | 70.9% | 0.2486 | 15% | 57% |
+| Final | 0.7042 | 81.2% | 0.2661 | 19% | 39% |
+| Basic | 0.7003 | 75.7% | 0.2637 | 18% | 44% |
+| Hybrid | 0.6605 | 63.0% | 0.1874 | 11% | 63% |
+| V3 (Regularized) | 0.6078 | 86.7% | 0.1961 | 19% | 18% |
+
+### Deep Dives: Learn from Failures and Successes
+
+#### V2 (3-Layer) - The Oversmoothing Disaster
+
+![Figure 18: V2 Deep Dive - Why deeper ≠ better for GNNs](notebook_v1/paper_figures/fig18_v2_deep_dive.png)
+
+**What Went Wrong**: Adding a 3rd layer caused "oversmoothing"—nodes became indistinguishable because information propagated too far. With 1M+ parameters, it was also massively overparameterized.
+
+**Lesson**: For fraud detection on dense graphs, **2 layers is optimal**.
+
+---
+
+#### V3 (Regularized) - The Underfitting Failure
+
+![Figure 19: V3 Deep Dive - Over-regularization kills performance](notebook_v1/paper_figures/fig19_v3_deep_dive.png)
+
+**What Went Wrong**: 
+- Dropout 0.5 = too aggressive (use 0.3)
+- Weight decay 1e-3 = 10x too high (use 1e-4)
+- Hidden dim 32 = too constrained (use 64+)
+
+**Result**: Only 18% recall—the model couldn't learn anything meaningful!
+
+**Lesson**: Start with **minimal regularization**, then add as needed.
+
+---
+
+#### Transformer - The Solid Baseline
+
+![Figure 20: Transformer Deep Dive - A strong baseline reference](notebook_v1/paper_figures/fig20_transformer_deep_dive.png)
+
+**Role**: TransformerConv with `to_hetero` wrapper—good AUC (0.7164), reasonable precision (20%), but moderate recall (36%).
+
+**Lesson**: Good for balanced trade-offs, but not optimal for catching maximum fraud.
+
+---
+
+#### GAT - The Fraud Catcher Champion
+
+![Figure 6B: GAT Deep Dive - The best model for catching fraudsters](notebook_v1/paper_figures/fig06b_gat_deep_dive.png)
+
+**Why GAT Wins for Fraud Detection**:
+- **75% recall** = catches 3 out of 4 fraudsters
+- Attention mechanism focuses on suspicious neighbors
+- Lightweight: only 24K parameters
+
+**Trade-off**: Lower precision (15%) means more false positives, but in fraud detection, **missing a fraudster is worse than investigating an innocent person**.
+
+---
+
+### 7.8 Final Model Selection: Which Model to Choose?
+
+After extensive experimentation across 10 model architectures, here is our definitive guidance:
+
+| Your Priority | Recommended Model | Why |
+|:--------------|:------------------|:----|
+| 🔴 **"Never miss fraud"** | **GAT** | 75% recall - catches 3 out of 4 fraudsters |
+| 🟢 **"Minimize false alarms"** | **HGT** | 25% precision - best accuracy among all |
+| 🏆 **"Best of both worlds"** | **GAT → HGT (Two-Stage)** | GAT screens, HGT refines |
+| 📊 **"Balanced approach"** | **Transformer** | 0.7164 AUC with moderate recall |
+
+**Production Recommendation**: 
+```
+All Employees → [GAT: threshold 0.3] → Suspicious Candidates → [HGT: threshold 0.5] → Confirmed Fraud
+               (75% recall)                                    (high precision)
+```
+
+This two-stage pipeline:
+- **Stage 1 (GAT)**: Flags suspicious employees with high recall
+- **Stage 2 (HGT)**: Filters false positives with precision
+- **Result**: ~70% recall + 42% reduction in false positives
 
 ---
 
