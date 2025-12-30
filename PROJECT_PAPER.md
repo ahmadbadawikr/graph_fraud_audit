@@ -643,7 +643,44 @@ We saved models based on best validation AUC, so the 20-epoch model optimized fo
 
 ---
 
-### 6.9 Summary: What We Learned
+### 6.9 The Critical Discovery: Threshold Sensitivity
+
+After implementing the two-stage production pipeline (GAT → HGT), we made a surprising discovery that fundamentally changed our understanding of model performance.
+
+**The Puzzle**: Why did HGT show 34% recall in our experiments, but 73.5% recall in production?
+
+| Run | Threshold | Recall | Precision |
+|:----|:----------|:-------|:----------|
+| Script 14 (optimized threshold) | **0.656** | 34% | 25% |
+| Script 18 (fixed threshold) | **0.500** | 73.5% | 13% |
+
+**The Answer**: Both runs used the **exact same model architecture**. The only difference was the classification threshold!
+
+**How Thresholds Work**:
+```
+Model outputs probability: 0.0 to 1.0
+
+High threshold (0.656): 
+  → Only confident predictions are "fraud"
+  → High precision, low recall
+
+Low threshold (0.500):
+  → More predictions are "fraud"  
+  → High recall, low precision
+```
+
+**Why Script 14 Used 0.656**: It called `find_optimal_threshold()` which maximizes **F1-score**. F1 balances precision and recall, but in fraud detection, **we often want to favor recall**.
+
+**Key Insight #9**: Model AUC (ranking ability) is **threshold-independent**. Both runs achieved ~0.74 AUC. Recall is **threshold-dependent**. Choose your threshold based on business cost:
+- **High cost of missing fraud** → Lower threshold → Higher recall
+- **High cost of false alarms** → Higher threshold → Higher precision
+
+**Production Recommendation**: 
+For fraud detection, use threshold **0.3-0.5** to maximize recall. The "optimal" F1 threshold (0.656) misses too many fraudsters.
+
+---
+
+### 6.10 Summary: What We Learned
 
 | Lesson | Insight |
 |:-------|:--------|
@@ -654,6 +691,7 @@ We saved models based on best validation AUC, so the 20-epoch model optimized fo
 | **Regularization has limits** | Over-regularization causes underfitting |
 | **Ensemble needs diversity** | Redundant components don't help |
 | **Optimize for the right metric** | Training longer may hurt your priority metric |
+| **Threshold is critical** | Same model, different threshold → 34% vs 73% recall |
 
 ---
 
