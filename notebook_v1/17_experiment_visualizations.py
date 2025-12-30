@@ -35,17 +35,20 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 # REAL EXPERIMENT DATA (From actual training logs)
 # ============================================================================
 
+# Calculate accuracy from confusion matrices: (TP + TN) / Total
+# Total test samples = 938 (870 non-fraud + 68 fraud approximately)
+
 ALL_MODELS = {
-    'SAGE': {'auc': 0.7043, 'f1': 0.2486, 'precision': 0.15, 'recall': 0.57, 'params': 23205, 'script': '7_train_gnn_standalone.py'},
-    'GAT': {'auc': 0.7067, 'f1': 0.2489, 'precision': 0.15, 'recall': 0.75, 'params': 24485, 'script': '7_train_gnn_standalone.py'},
-    'Transformer': {'auc': 0.7164, 'f1': 0.2636, 'precision': 0.20, 'recall': 0.36, 'params': 47525, 'script': '7_train_gnn_standalone.py'},
-    'V2 (3-layer)': {'auc': 0.7046, 'f1': 0.2559, 'precision': 0.15, 'recall': 0.67, 'params': 1028549, 'script': '9_transformer_v2.py'},
-    'V3 (Regularized)': {'auc': 0.6078, 'f1': 0.1961, 'precision': 0.19, 'recall': 0.18, 'params': 101477, 'script': '10_transformer_v3.py'},
-    'Basic': {'auc': 0.7003, 'f1': 0.2637, 'precision': 0.18, 'recall': 0.44, 'params': 6440, 'script': '12_graph_transformer_basic.py'},
-    'Final': {'auc': 0.7042, 'f1': 0.2661, 'precision': 0.19, 'recall': 0.39, 'params': 10216, 'script': '13_transformer_final.py'},
-    'HGT': {'auc': 0.7417, 'f1': 0.2976, 'precision': 0.25, 'recall': 0.34, 'params': 209435, 'script': '14_train_hgt.py'},
-    'Ensemble': {'auc': 0.7153, 'f1': 0.2475, 'precision': 0.16, 'recall': 0.48, 'params': None, 'script': '8_final_ensemble_optimization.py'},
-    'Hybrid': {'auc': 0.6605, 'f1': 0.1874, 'precision': 0.11, 'recall': 0.63, 'params': None, 'script': '15_hybrid_gnn_xgboost.py'},
+    'SAGE': {'auc': 0.7043, 'f1': 0.2486, 'precision': 0.15, 'recall': 0.57, 'accuracy': 0.709, 'params': 23205, 'script': '7_train_gnn_standalone.py'},
+    'GAT': {'auc': 0.7067, 'f1': 0.2489, 'precision': 0.15, 'recall': 0.75, 'accuracy': 0.619, 'params': 24485, 'script': '7_train_gnn_standalone.py'},
+    'Transformer': {'auc': 0.7164, 'f1': 0.2636, 'precision': 0.20, 'recall': 0.36, 'accuracy': 0.826, 'params': 47525, 'script': '7_train_gnn_standalone.py'},
+    'V2 (3-layer)': {'auc': 0.7046, 'f1': 0.2559, 'precision': 0.15, 'recall': 0.67, 'accuracy': 0.664, 'params': 1028549, 'script': '9_transformer_v2.py'},
+    'V3 (Regularized)': {'auc': 0.6078, 'f1': 0.1961, 'precision': 0.19, 'recall': 0.18, 'accuracy': 0.867, 'params': 101477, 'script': '10_transformer_v3.py'},
+    'Basic': {'auc': 0.7003, 'f1': 0.2637, 'precision': 0.18, 'recall': 0.44, 'accuracy': 0.757, 'params': 6440, 'script': '12_graph_transformer_basic.py'},
+    'Final': {'auc': 0.7042, 'f1': 0.2661, 'precision': 0.19, 'recall': 0.39, 'accuracy': 0.812, 'params': 10216, 'script': '13_transformer_final.py'},
+    'HGT': {'auc': 0.7417, 'f1': 0.2976, 'precision': 0.25, 'recall': 0.34, 'accuracy': 0.876, 'params': 209435, 'script': '14_train_hgt.py'},
+    'Ensemble': {'auc': 0.7153, 'f1': 0.2475, 'precision': 0.16, 'recall': 0.48, 'accuracy': 0.759, 'params': None, 'script': '8_final_ensemble_optimization.py'},
+    'Hybrid': {'auc': 0.6605, 'f1': 0.1874, 'precision': 0.11, 'recall': 0.63, 'accuracy': 0.630, 'params': None, 'script': '15_hybrid_gnn_xgboost.py'},
 }
 
 # Confusion matrices from logs (10-epoch results)
@@ -986,6 +989,320 @@ def plot_threshold_sensitivity():
     print("✓ fig16_threshold_sensitivity.png")
 
 # ============================================================================
+# FIGURE 17: Comprehensive Metrics Heatmap
+# ============================================================================
+def plot_comprehensive_metrics():
+    """Create a comprehensive metrics heatmap for all models"""
+    fig, ax = plt.subplots(figsize=(14, 8))
+    
+    models = list(ALL_MODELS.keys())
+    metrics = ['AUC', 'Accuracy', 'F1', 'Precision', 'Recall']
+    
+    # Build data matrix
+    data = np.array([
+        [ALL_MODELS[m]['auc'] for m in models],
+        [ALL_MODELS[m]['accuracy'] for m in models],
+        [ALL_MODELS[m]['f1'] for m in models],
+        [ALL_MODELS[m]['precision'] for m in models],
+        [ALL_MODELS[m]['recall'] for m in models],
+    ])
+    
+    # Create heatmap
+    im = ax.imshow(data, cmap='RdYlGn', aspect='auto', vmin=0, vmax=1)
+    
+    # Labels
+    ax.set_xticks(range(len(models)))
+    ax.set_xticklabels(models, rotation=45, ha='right')
+    ax.set_yticks(range(len(metrics)))
+    ax.set_yticklabels(metrics)
+    
+    # Annotate
+    for i in range(len(metrics)):
+        for j in range(len(models)):
+            val = data[i, j]
+            color = 'white' if val < 0.5 else 'black'
+            ax.text(j, i, f'{val:.2f}', ha='center', va='center', color=color, fontweight='bold')
+    
+    # Colorbar
+    cbar = plt.colorbar(im, ax=ax)
+    cbar.set_label('Score (0-1)')
+    
+    plt.title('Figure 17: Comprehensive Model Metrics Comparison', fontsize=14, fontweight='bold')
+    plt.tight_layout()
+    plt.savefig(f"{OUTPUT_DIR}/fig17_comprehensive_metrics.png")
+    plt.close()
+    print("✓ fig17_comprehensive_metrics.png")
+
+# ============================================================================
+# FIGURE 18: V2 (3-Layer) Deep Dive - Oversmoothing Analysis
+# ============================================================================
+def plot_v2_deep_dive():
+    """V2 deep dive - Oversmoothing example"""
+    fig = plt.figure(figsize=(16, 10))
+    gs = fig.add_gridspec(2, 2, hspace=0.3, wspace=0.3)
+    
+    data = TRAINING_DATA['V2 (3-layer)']
+    
+    # Top Left: Val F1 curve (no loss data available)
+    ax1 = fig.add_subplot(gs[0, 0])
+    ax1.plot(data['epochs'], data['val_f1'], 'o-', linewidth=2, markersize=6, color='#e74c3c')
+    ax1.set_xlabel('Epoch')
+    ax1.set_ylabel('Validation F1')
+    ax1.set_title('V2 Validation F1 Score')
+    ax1.grid(True, alpha=0.3)
+    
+    # Top Right: Val AUC curve
+    ax2 = fig.add_subplot(gs[0, 1])
+    ax2.plot(data['epochs'], data['val_auc'], 's-', linewidth=2, markersize=6, color='#9b59b6')
+    best_epoch = np.argmax(data['val_auc']) + 1
+    ax2.axvline(x=best_epoch, color='green', linestyle='--', alpha=0.7, label=f'Best: Ep {best_epoch}')
+    ax2.set_xlabel('Epoch')
+    ax2.set_ylabel('Validation AUC')
+    ax2.set_title('V2 Validation AUC')
+    ax2.legend()
+    ax2.grid(True, alpha=0.3)
+    
+    # Bottom Left: Metrics Box
+    ax3 = fig.add_subplot(gs[1, 0])
+    ax3.axis('off')
+    
+    cm = CONFUSION_MATRICES['V2 (3-layer)']
+    tn, fp, fn, tp = cm[0,0], cm[0,1], cm[1,0], cm[1,1]
+    recall = tp / (tp + fn)
+    precision = tp / (tp + fp)
+    
+    metrics_text = f"""
+    ╔══════════════════════════════════════════════════╗
+    ║          V2 (3-LAYER) PERFORMANCE                ║
+    ╠══════════════════════════════════════════════════╣
+    ║  Test AUC:       {ALL_MODELS['V2 (3-layer)']['auc']:.4f}                        ║
+    ║  Test Accuracy:  {ALL_MODELS['V2 (3-layer)']['accuracy']:.1%}                        ║
+    ║  Test F1:        {ALL_MODELS['V2 (3-layer)']['f1']:.4f}                        ║
+    ║  Recall:         {recall:.0%}                           ║
+    ║  Precision:      {precision:.0%}                          ║
+    ║  Parameters:     {ALL_MODELS['V2 (3-layer)']['params']:,}                   ║
+    ╠══════════════════════════════════════════════════╣
+    ║  Confusion Matrix:  TN={tn} FP={fp}              ║
+    ║                     FN={fn} TP={tp}              ║
+    ╠══════════════════════════════════════════════════╣
+    ║  ⚠️ WHY V2 UNDERPERFORMED:                       ║
+    ║  • 3 layers causes oversmoothing                 ║
+    ║  • 20x more parameters than needed               ║
+    ║  • Deeper ≠ Better for GNNs                      ║
+    ╚══════════════════════════════════════════════════╝
+    """
+    ax3.text(0.5, 0.5, metrics_text, fontsize=10, ha='center', va='center',
+             transform=ax3.transAxes, family='monospace',
+             bbox=dict(boxstyle='round', facecolor='#fce4ec', edgecolor='#9b59b6', linewidth=2))
+    
+    # Bottom Right: Architecture diagram
+    ax4 = fig.add_subplot(gs[1, 1])
+    ax4.set_xlim(0, 14)
+    ax4.set_ylim(0, 6)
+    ax4.axis('off')
+    
+    boxes = [
+        ((0.5, 2), 1.8, 2, '#ecf0f1', 'Input'),
+        ((2.5, 2), 1.8, 2, '#9b59b6', 'Layer 1'),
+        ((4.5, 2), 1.8, 2, '#9b59b6', 'Layer 2'),
+        ((6.5, 2), 1.8, 2, '#e74c3c', 'Layer 3\n⚠️'),
+        ((8.5, 2), 1.8, 2, '#55efc4', 'Output'),
+    ]
+    
+    for (x, y), w, h, color, text in boxes:
+        rect = Rect((x, y), w, h, facecolor=color, edgecolor='black', linewidth=2, alpha=0.8)
+        ax4.add_patch(rect)
+        ax4.text(x + w/2, y + h/2, text, ha='center', va='center', fontsize=9, fontweight='bold')
+    
+    ax4.text(7.4, 4.5, 'Oversmoothing Zone!', fontsize=10, color='#e74c3c', fontweight='bold')
+    ax4.text(7, 0.8, '3 layers = nodes become indistinguishable', fontsize=9, ha='center', style='italic')
+    
+    plt.suptitle('Figure 18: V2 (3-Layer) Deep Dive — Oversmoothing Disaster', 
+                 fontsize=14, y=0.98, color='#9b59b6', fontweight='bold')
+    plt.savefig(f"{OUTPUT_DIR}/fig18_v2_deep_dive.png")
+    plt.close()
+    print("✓ fig18_v2_deep_dive.png")
+
+# ============================================================================
+# FIGURE 19: V3 (Regularized) Deep Dive - Underfitting Analysis
+# ============================================================================
+def plot_v3_deep_dive():
+    """V3 deep dive - Over-regularization failure"""
+    fig = plt.figure(figsize=(16, 10))
+    gs = fig.add_gridspec(2, 2, hspace=0.3, wspace=0.3)
+    
+    data = TRAINING_DATA['V3 (Regularized)']
+    
+    # Top Left: Val F1 curve (no loss data available)
+    ax1 = fig.add_subplot(gs[0, 0])
+    ax1.plot(data['epochs'], data['val_f1'], 'o-', linewidth=2, markersize=6, color='#e74c3c')
+    ax1.set_xlabel('Epoch')
+    ax1.set_ylabel('Validation F1')
+    ax1.set_title('V3 Validation F1 (Unstable!)')
+    ax1.grid(True, alpha=0.3)
+    
+    # Top Right: Val AUC curve (unstable)
+    ax2 = fig.add_subplot(gs[0, 1])
+    ax2.plot(data['epochs'], data['val_auc'], 's-', linewidth=2, markersize=6, color='#e67e22')
+    ax2.set_xlabel('Epoch')
+    ax2.set_ylabel('Validation AUC')
+    ax2.set_title('V3 Validation AUC (Unstable!)')
+    ax2.axhline(y=0.7, color='green', linestyle='--', alpha=0.5, label='Target AUC')
+    ax2.legend()
+    ax2.grid(True, alpha=0.3)
+    
+    # Bottom Left: Metrics Box
+    ax3 = fig.add_subplot(gs[1, 0])
+    ax3.axis('off')
+    
+    cm = CONFUSION_MATRICES['V3 (Regularized)']
+    tn, fp, fn, tp = cm[0,0], cm[0,1], cm[1,0], cm[1,1]
+    
+    metrics_text = f"""
+    ╔══════════════════════════════════════════════════╗
+    ║          V3 (REGULARIZED) — WORST MODEL!         ║
+    ╠══════════════════════════════════════════════════╣
+    ║  Test AUC:       {ALL_MODELS['V3 (Regularized)']['auc']:.4f} (WORST!)              ║
+    ║  Test Accuracy:  {ALL_MODELS['V3 (Regularized)']['accuracy']:.1%}                        ║
+    ║  Test F1:        {ALL_MODELS['V3 (Regularized)']['f1']:.4f}                        ║
+    ║  Recall:         {ALL_MODELS['V3 (Regularized)']['recall']:.0%} (WORST!)               ║
+    ║  Precision:      {ALL_MODELS['V3 (Regularized)']['precision']:.0%}                          ║
+    ╠══════════════════════════════════════════════════╣
+    ║  Confusion Matrix:  TN={tn} FP={fp}              ║
+    ║                     FN={fn} TP={tp}              ║
+    ╠══════════════════════════════════════════════════╣
+    ║  ❌ WHAT WENT WRONG:                             ║
+    ║  • Dropout 0.5 = too aggressive                  ║
+    ║  • Weight decay 1e-3 = 10x too high              ║
+    ║  • Hidden dim 32 = too constrained               ║
+    ║  • Result: UNDERFITTING                          ║
+    ╚══════════════════════════════════════════════════╝
+    """
+    ax3.text(0.5, 0.5, metrics_text, fontsize=10, ha='center', va='center',
+             transform=ax3.transAxes, family='monospace',
+             bbox=dict(boxstyle='round', facecolor='#ffebee', edgecolor='#e74c3c', linewidth=2))
+    
+    # Bottom Right: What to avoid
+    ax4 = fig.add_subplot(gs[1, 1])
+    ax4.axis('off')
+    
+    lessons_text = """
+    ╔══════════════════════════════════════════════════╗
+    ║            LESSONS FROM V3 FAILURE               ║
+    ╠══════════════════════════════════════════════════╣
+    ║                                                  ║
+    ║  ❌ DON'T:                                       ║
+    ║     • Use dropout > 0.3 for fraud detection      ║
+    ║     • Use weight decay > 1e-4                    ║
+    ║     • Reduce hidden dim below 64                 ║
+    ║                                                  ║
+    ║  ✅ DO:                                          ║
+    ║     • Start with minimal regularization          ║
+    ║     • Monitor validation loss for underfitting   ║
+    ║     • Check recall, not just AUC                 ║
+    ║                                                  ║
+    ╚══════════════════════════════════════════════════╝
+    """
+    ax4.text(0.5, 0.5, lessons_text, fontsize=10, ha='center', va='center',
+             transform=ax4.transAxes, family='monospace',
+             bbox=dict(boxstyle='round', facecolor='#fff3e0', edgecolor='#e67e22', linewidth=2))
+    
+    plt.suptitle('Figure 19: V3 (Regularized) Deep Dive — Over-Regularization Disaster', 
+                 fontsize=14, y=0.98, color='#e74c3c', fontweight='bold')
+    plt.savefig(f"{OUTPUT_DIR}/fig19_v3_deep_dive.png")
+    plt.close()
+    print("✓ fig19_v3_deep_dive.png")
+
+# ============================================================================
+# FIGURE 20: Transformer Deep Dive - Baseline Reference
+# ============================================================================
+def plot_transformer_deep_dive():
+    """Transformer deep dive - Solid baseline"""
+    fig = plt.figure(figsize=(16, 10))
+    gs = fig.add_gridspec(2, 2, hspace=0.3, wspace=0.3)
+    
+    data = TRAINING_DATA['Transformer']
+    
+    # Top Left: Val F1 curve (no loss data available)
+    ax1 = fig.add_subplot(gs[0, 0])
+    ax1.plot(data['epochs'], data['val_f1'], 'o-', linewidth=2, markersize=6, color='#3498db')
+    ax1.set_xlabel('Epoch')
+    ax1.set_ylabel('Validation F1')
+    ax1.set_title('Transformer Validation F1')
+    ax1.grid(True, alpha=0.3)
+    
+    # Top Right: Val AUC curve
+    ax2 = fig.add_subplot(gs[0, 1])
+    ax2.plot(data['epochs'], data['val_auc'], 's-', linewidth=2, markersize=6, color='#3498db')
+    best_epoch = np.argmax(data['val_auc']) + 1
+    ax2.axvline(x=best_epoch, color='green', linestyle='--', alpha=0.7, label=f'Best: Ep {best_epoch}')
+    ax2.set_xlabel('Epoch')
+    ax2.set_ylabel('Validation AUC')
+    ax2.set_title('Transformer Validation AUC')
+    ax2.legend()
+    ax2.grid(True, alpha=0.3)
+    
+    # Bottom Left: Metrics Box
+    ax3 = fig.add_subplot(gs[1, 0])
+    ax3.axis('off')
+    
+    cm = CONFUSION_MATRICES['Transformer']
+    tn, fp, fn, tp = cm[0,0], cm[0,1], cm[1,0], cm[1,1]
+    recall = tp / (tp + fn)
+    precision = tp / (tp + fp)
+    
+    metrics_text = f"""
+    ╔══════════════════════════════════════════════════╗
+    ║       TRANSFORMER (TransformerConv) METRICS      ║
+    ╠══════════════════════════════════════════════════╣
+    ║  Test AUC:       {ALL_MODELS['Transformer']['auc']:.4f}                        ║
+    ║  Test Accuracy:  {ALL_MODELS['Transformer']['accuracy']:.1%}                        ║
+    ║  Test F1:        {ALL_MODELS['Transformer']['f1']:.4f}                        ║
+    ║  Recall:         {recall:.0%}                           ║
+    ║  Precision:      {precision:.0%} (Best among wrappers!)    ║
+    ║  Parameters:     {ALL_MODELS['Transformer']['params']:,}                      ║
+    ╠══════════════════════════════════════════════════╣
+    ║  Confusion Matrix:  TN={tn} FP={fp}              ║
+    ║                     FN={fn} TP={tp}              ║
+    ╠══════════════════════════════════════════════════╣
+    ║  📊 ROLE: Solid Baseline                         ║
+    ║  • Multi-head attention mechanism                ║
+    ║  • Good AUC/precision balance                    ║
+    ║  • Lower recall than GAT                         ║
+    ╚══════════════════════════════════════════════════╝
+    """
+    ax3.text(0.5, 0.5, metrics_text, fontsize=10, ha='center', va='center',
+             transform=ax3.transAxes, family='monospace',
+             bbox=dict(boxstyle='round', facecolor='#e3f2fd', edgecolor='#3498db', linewidth=2))
+    
+    # Bottom Right: Architecture diagram
+    ax4 = fig.add_subplot(gs[1, 1])
+    ax4.set_xlim(0, 14)
+    ax4.set_ylim(0, 6)
+    ax4.axis('off')
+    
+    boxes = [
+        ((0.5, 2), 2, 2, '#ecf0f1', 'Input\n21-dim'),
+        ((3, 2), 2.5, 2, '#3498db', 'TransConv 1\n4 Heads'),
+        ((6, 2), 2.5, 2, '#3498db', 'TransConv 2\n4 Heads'),
+        ((9, 2), 2, 2, '#55efc4', 'Output\nSigmoid'),
+    ]
+    
+    for (x, y), w, h, color, text in boxes:
+        rect = Rect((x, y), w, h, facecolor=color, edgecolor='black', linewidth=2, alpha=0.8)
+        ax4.add_patch(rect)
+        ax4.text(x + w/2, y + h/2, text, ha='center', va='center', fontsize=9, fontweight='bold')
+    
+    ax4.text(6.5, 5, 'TransformerConv with to_hetero wrapper', fontsize=11, fontweight='bold', ha='center')
+    ax4.text(6.5, 0.7, '2 layers optimal (same architecture as V1 baseline)', fontsize=9, ha='center', style='italic')
+    
+    plt.suptitle('Figure 20: Transformer Deep Dive — Strong Baseline', 
+                 fontsize=14, y=0.98, color='#3498db', fontweight='bold')
+    plt.savefig(f"{OUTPUT_DIR}/fig20_transformer_deep_dive.png")
+    plt.close()
+    print("✓ fig20_transformer_deep_dive.png")
+
+# ============================================================================
 # MAIN
 # ============================================================================
 def main():
@@ -1015,13 +1332,20 @@ def main():
     plot_model_selection_guide()      # Fig 15 - Decision guide
     plot_threshold_sensitivity()      # Fig 16 - Critical insight!
     
+    # NEW: Comprehensive metrics and additional deep dives
+    plot_comprehensive_metrics()      # Fig 17 - All metrics heatmap
+    plot_v2_deep_dive()               # Fig 18 - Oversmoothing analysis
+    plot_v3_deep_dive()               # Fig 19 - Underfitting analysis
+    plot_transformer_deep_dive()      # Fig 20 - Baseline reference
+    
     print("\n" + "=" * 60)
-    print("✅ ALL 16 FIGURES GENERATED")
+    print("✅ ALL 20 FIGURES GENERATED")
     print("=" * 60)
-    print("\n📊 FOR FRAUD DETECTION:")
-    print(f"  Best Recall (catch fraudsters): GAT (75%)")
-    print(f"  Best Precision (reduce false alarms): HGT (25%)")
-    print(f"  Best AUC (overall ranking): HGT (0.7417)")
+    print("\n📊 KEY METRICS SUMMARY:")
+    print(f"  Best AUC: HGT (0.7417)")
+    print(f"  Best Recall: GAT (75%)")
+    print(f"  Best Accuracy: HGT (87.6%)")
+    print(f"  Best F1: HGT (0.2976)")
     print(f"  Worst Model: V3 (AUC=0.6078, Recall=18%)")
 
 if __name__ == "__main__":
