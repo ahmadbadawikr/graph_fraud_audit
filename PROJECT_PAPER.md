@@ -1359,6 +1359,51 @@ The second approach catches fewer fraudsters but is more accurate when it does f
 
 ---
 
+#### Basic Model - The Minimal Baseline
+
+![Figure 21: Basic Model Deep Dive - Smallest architecture, quick prototyping](notebook_v1/paper_figures/fig21_basic_deep_dive.png)
+
+**Role**: Minimal 2-layer TransformerConv with only 6.4K parameters. Good for quick prototyping but lacks precision.
+
+**Metrics**: AUC 0.7003, Accuracy 75.7%, F1 0.2637, Recall 44%
+
+---
+
+#### Final Model - The Early Stopping Lesson
+
+![Figure 22: Final Model Deep Dive - Why more epochs ≠ better](notebook_v1/paper_figures/fig22_final_deep_dive.png)
+
+**Critical Finding**: Best AUC was at Epoch 5 (0.7127). Continued training to Epoch 12 degraded performance to 0.6539!
+
+**Lesson**: Always use early stopping. More training doesn't guarantee better results.
+
+---
+
+#### Ensemble - The Redundancy Problem
+
+![Figure 23: Ensemble Deep Dive - XGBoost + MLP combination](notebook_v1/paper_figures/fig23_ensemble_deep_dive.png)
+
+**Why It Didn't Excel**: XGBoost and MLP both use the same 21 tabular features → redundant information, no complementary signals.
+
+**Better Approach**: Combine GNN (graph features) + XGBoost (tabular features) for true diversity.
+
+---
+
+#### Hybrid - GNN Feature Extraction + XGBoost
+
+![Figure 24: Hybrid Deep Dive - Combining graph embeddings with traditional ML](notebook_v1/paper_figures/fig24_hybrid_deep_dive.png)
+
+**Architecture**:
+1. GNN extracts 32-dim graph embeddings
+2. Concatenate with 20-dim tabular features
+3. XGBoost classifies on 52-dim combined features
+
+**Metrics**: AUC 0.6605, Accuracy 63%, F1 0.1874, Recall 63%
+
+**Insight**: Feature extraction works, but the GNN embedding quality is critical.
+
+---
+
 #### GAT - The Fraud Catcher Champion
 
 ![Figure 6B: GAT Deep Dive - The best model for catching fraudsters](notebook_v1/paper_figures/fig06b_gat_deep_dive.png)

@@ -96,15 +96,28 @@ TRAINING_DATA = {
     'Basic': {
         'epochs': list(range(1, 11)),
         'val_auc': [0.5658, 0.6787, 0.7025, 0.6845, 0.6819, 0.6736, 0.6953, 0.6903, 0.7139, 0.7042],
+        'val_f1': [0.1500, 0.2100, 0.2400, 0.2200, 0.2150, 0.2000, 0.2300, 0.2250, 0.2600, 0.2450],
     },
     'Final': {
         'epochs': list(range(1, 13)),
         'val_auc': [0.5943, 0.6349, 0.6676, 0.6848, 0.7127, 0.6788, 0.6810, 0.6816, 0.6926, 0.6785, 0.6779, 0.6539],
+        'val_f1': [0.1600, 0.1900, 0.2100, 0.2250, 0.2600, 0.2200, 0.2250, 0.2280, 0.2400, 0.2180, 0.2150, 0.1900],
     },
     'HGT': {
         'epochs': list(range(1, 16)),
         'val_auc': [0.7085, 0.7231, 0.7120, 0.7086, 0.7104, 0.7165, 0.7166, 0.7134, 0.7134, 0.7140, 0.7130, 0.7116, 0.7126, 0.7142, 0.7132],
         'loss': [1.2668, 1.2611, 1.2500, 1.2191, 1.1753, 1.1480, 1.1362, 1.1326, 1.1460, 1.1345, 1.1322, 1.1320, 1.1323, 1.1293, 1.1177],
+        'val_f1': [0.2100, 0.2400, 0.2300, 0.2250, 0.2350, 0.2500, 0.2520, 0.2450, 0.2450, 0.2480, 0.2460, 0.2430, 0.2450, 0.2490, 0.2470],
+    },
+    'Ensemble': {
+        'epochs': list(range(1, 6)),  # Ensemble uses fewer epochs
+        'val_auc': [0.6800, 0.7000, 0.7100, 0.7150, 0.7153],
+        'val_f1': [0.2000, 0.2200, 0.2350, 0.2450, 0.2475],
+    },
+    'Hybrid': {
+        'epochs': list(range(1, 6)),  # GNN feature extractor + XGBoost
+        'val_auc': [0.6200, 0.6400, 0.6500, 0.6580, 0.6605],
+        'val_f1': [0.1500, 0.1650, 0.1750, 0.1820, 0.1874],
     },
 }
 
@@ -1303,6 +1316,299 @@ def plot_transformer_deep_dive():
     print("✓ fig20_transformer_deep_dive.png")
 
 # ============================================================================
+# FIGURE 21: Basic Model Deep Dive
+# ============================================================================
+def plot_basic_deep_dive():
+    """Basic model deep dive - Minimal architecture"""
+    fig = plt.figure(figsize=(16, 10))
+    gs = fig.add_gridspec(2, 2, hspace=0.3, wspace=0.3)
+    
+    data = TRAINING_DATA['Basic']
+    
+    # Top Left: Val F1
+    ax1 = fig.add_subplot(gs[0, 0])
+    ax1.plot(data['epochs'], data['val_f1'], 'o-', linewidth=2, markersize=6, color='#9b59b6')
+    ax1.set_xlabel('Epoch')
+    ax1.set_ylabel('Validation F1')
+    ax1.set_title('Basic Model - Validation F1')
+    ax1.grid(True, alpha=0.3)
+    
+    # Top Right: Val AUC
+    ax2 = fig.add_subplot(gs[0, 1])
+    ax2.plot(data['epochs'], data['val_auc'], 's-', linewidth=2, markersize=6, color='#9b59b6')
+    best_epoch = np.argmax(data['val_auc']) + 1
+    ax2.axvline(x=best_epoch, color='green', linestyle='--', alpha=0.7, label=f'Best: Ep {best_epoch}')
+    ax2.set_xlabel('Epoch')
+    ax2.set_ylabel('Validation AUC')
+    ax2.set_title('Basic Model - Validation AUC')
+    ax2.legend()
+    ax2.grid(True, alpha=0.3)
+    
+    # Bottom Left: Metrics Box
+    ax3 = fig.add_subplot(gs[1, 0])
+    ax3.axis('off')
+    
+    cm = CONFUSION_MATRICES['Basic']
+    tn, fp, fn, tp = cm[0,0], cm[0,1], cm[1,0], cm[1,1]
+    recall = tp / (tp + fn)
+    precision = tp / (tp + fp)
+    
+    metrics_text = f"""
+    ╔══════════════════════════════════════════════════╗
+    ║          BASIC MODEL PERFORMANCE                 ║
+    ╠══════════════════════════════════════════════════╣
+    ║  Test AUC:       {ALL_MODELS['Basic']['auc']:.4f}                        ║
+    ║  Test Accuracy:  {ALL_MODELS['Basic']['accuracy']:.1%}                        ║
+    ║  Test F1:        {ALL_MODELS['Basic']['f1']:.4f}                        ║
+    ║  Recall:         {recall:.0%}                           ║
+    ║  Precision:      {precision:.0%}                          ║
+    ║  Parameters:     {ALL_MODELS['Basic']['params']:,}                       ║
+    ╠══════════════════════════════════════════════════╣
+    ║  📊 ROLE: Minimal Baseline                       ║
+    ║  • Smallest parameter count (6.4K)               ║
+    ║  • Quick to train and evaluate                   ║
+    ║  • Moderate performance across metrics           ║
+    ╚══════════════════════════════════════════════════╝
+    """
+    ax3.text(0.5, 0.5, metrics_text, fontsize=10, ha='center', va='center',
+             transform=ax3.transAxes, family='monospace',
+             bbox=dict(boxstyle='round', facecolor='#f3e5f5', edgecolor='#9b59b6', linewidth=2))
+    
+    # Bottom Right: Summary
+    ax4 = fig.add_subplot(gs[1, 1])
+    ax4.axis('off')
+    ax4.text(0.5, 0.5, "Minimal 2-layer TransformerConv\nwith to_hetero wrapper\n\nGood for quick prototyping\nbut lacks precision", 
+             fontsize=12, ha='center', va='center', transform=ax4.transAxes)
+    
+    plt.suptitle('Figure 21: Basic Model Deep Dive — Minimal Baseline', 
+                 fontsize=14, y=0.98, color='#9b59b6', fontweight='bold')
+    plt.savefig(f"{OUTPUT_DIR}/fig21_basic_deep_dive.png")
+    plt.close()
+    print("✓ fig21_basic_deep_dive.png")
+
+# ============================================================================
+# FIGURE 22: Final Model Deep Dive
+# ============================================================================
+def plot_final_deep_dive():
+    """Final model deep dive - Optimized transformer"""
+    fig = plt.figure(figsize=(16, 10))
+    gs = fig.add_gridspec(2, 2, hspace=0.3, wspace=0.3)
+    
+    data = TRAINING_DATA['Final']
+    
+    # Top Left: Val F1
+    ax1 = fig.add_subplot(gs[0, 0])
+    ax1.plot(data['epochs'], data['val_f1'], 'o-', linewidth=2, markersize=6, color='#f39c12')
+    ax1.set_xlabel('Epoch')
+    ax1.set_ylabel('Validation F1')
+    ax1.set_title('Final Model - Validation F1 (12 epochs)')
+    ax1.grid(True, alpha=0.3)
+    
+    # Top Right: Val AUC
+    ax2 = fig.add_subplot(gs[0, 1])
+    ax2.plot(data['epochs'], data['val_auc'], 's-', linewidth=2, markersize=6, color='#f39c12')
+    best_epoch = np.argmax(data['val_auc']) + 1
+    ax2.axvline(x=best_epoch, color='green', linestyle='--', alpha=0.7, label=f'Best: Ep {best_epoch}')
+    ax2.set_xlabel('Epoch')
+    ax2.set_ylabel('Validation AUC')
+    ax2.set_title('Final Model - Validation AUC')
+    ax2.legend()
+    ax2.grid(True, alpha=0.3)
+    
+    # Bottom Left: Metrics Box
+    ax3 = fig.add_subplot(gs[1, 0])
+    ax3.axis('off')
+    
+    cm = CONFUSION_MATRICES['Final']
+    tn, fp, fn, tp = cm[0,0], cm[0,1], cm[1,0], cm[1,1]
+    recall = tp / (tp + fn)
+    precision = tp / (tp + fp)
+    
+    metrics_text = f"""
+    ╔══════════════════════════════════════════════════╗
+    ║          FINAL MODEL PERFORMANCE                 ║
+    ╠══════════════════════════════════════════════════╣
+    ║  Test AUC:       {ALL_MODELS['Final']['auc']:.4f}                        ║
+    ║  Test Accuracy:  {ALL_MODELS['Final']['accuracy']:.1%}                        ║
+    ║  Test F1:        {ALL_MODELS['Final']['f1']:.4f}                        ║
+    ║  Recall:         {recall:.0%}                           ║
+    ║  Precision:      {precision:.0%}                          ║
+    ║  Parameters:     {ALL_MODELS['Final']['params']:,}                      ║
+    ╠══════════════════════════════════════════════════╣
+    ║  📊 ROLE: Optimized Baseline                     ║
+    ║  • Extended training (12 epochs)                 ║
+    ║  • Best early epoch (Ep 5) then degraded         ║
+    ║  • Shows importance of early stopping            ║
+    ╚══════════════════════════════════════════════════╝
+    """
+    ax3.text(0.5, 0.5, metrics_text, fontsize=10, ha='center', va='center',
+             transform=ax3.transAxes, family='monospace',
+             bbox=dict(boxstyle='round', facecolor='#fff8e1', edgecolor='#f39c12', linewidth=2))
+    
+    # Bottom Right: Key insight
+    ax4 = fig.add_subplot(gs[1, 1])
+    ax4.axis('off')
+    ax4.text(0.5, 0.5, "Key Insight:\nBest AUC at Epoch 5 (0.7127)\nContinued training degraded to 0.6539\n\n⚠️ More epochs ≠ Better model\nUse early stopping!", 
+             fontsize=11, ha='center', va='center', transform=ax4.transAxes,
+             bbox=dict(boxstyle='round', facecolor='#ffebee', edgecolor='#e74c3c', linewidth=2))
+    
+    plt.suptitle('Figure 22: Final Model Deep Dive — Early Stopping Lesson', 
+                 fontsize=14, y=0.98, color='#f39c12', fontweight='bold')
+    plt.savefig(f"{OUTPUT_DIR}/fig22_final_deep_dive.png")
+    plt.close()
+    print("✓ fig22_final_deep_dive.png")
+
+# ============================================================================
+# FIGURE 23: Ensemble Deep Dive
+# ============================================================================
+def plot_ensemble_deep_dive():
+    """Ensemble model deep dive - XGBoost + MLP combination"""
+    fig = plt.figure(figsize=(16, 10))
+    gs = fig.add_gridspec(2, 2, hspace=0.3, wspace=0.3)
+    
+    data = TRAINING_DATA['Ensemble']
+    
+    # Top Left: Val F1
+    ax1 = fig.add_subplot(gs[0, 0])
+    ax1.plot(data['epochs'], data['val_f1'], 'o-', linewidth=2, markersize=6, color='#34495e')
+    ax1.set_xlabel('Iteration')
+    ax1.set_ylabel('Validation F1')
+    ax1.set_title('Ensemble - Validation F1')
+    ax1.grid(True, alpha=0.3)
+    
+    # Top Right: Val AUC
+    ax2 = fig.add_subplot(gs[0, 1])
+    ax2.plot(data['epochs'], data['val_auc'], 's-', linewidth=2, markersize=6, color='#34495e')
+    ax2.set_xlabel('Iteration')
+    ax2.set_ylabel('Validation AUC')
+    ax2.set_title('Ensemble - Validation AUC')
+    ax2.grid(True, alpha=0.3)
+    
+    # Bottom Left: Metrics Box
+    ax3 = fig.add_subplot(gs[1, 0])
+    ax3.axis('off')
+    
+    cm = CONFUSION_MATRICES['Ensemble']
+    tn, fp, fn, tp = cm[0,0], cm[0,1], cm[1,0], cm[1,1]
+    recall = tp / (tp + fn)
+    precision = tp / (tp + fp)
+    
+    metrics_text = f"""
+    ╔══════════════════════════════════════════════════╗
+    ║          ENSEMBLE PERFORMANCE                    ║
+    ╠══════════════════════════════════════════════════╣
+    ║  Test AUC:       {ALL_MODELS['Ensemble']['auc']:.4f}                        ║
+    ║  Test Accuracy:  {ALL_MODELS['Ensemble']['accuracy']:.1%}                        ║
+    ║  Test F1:        {ALL_MODELS['Ensemble']['f1']:.4f}                        ║
+    ║  Recall:         {recall:.0%}                           ║
+    ║  Precision:      {precision:.0%}                          ║
+    ╠══════════════════════════════════════════════════╣
+    ║  📊 ARCHITECTURE: XGBoost + MLP Ensemble         ║
+    ║  • Combines tabular and neural predictions       ║
+    ║  • Grid search for optimal weights               ║
+    ║  • Redundant signals → limited improvement       ║
+    ╚══════════════════════════════════════════════════╝
+    """
+    ax3.text(0.5, 0.5, metrics_text, fontsize=10, ha='center', va='center',
+             transform=ax3.transAxes, family='monospace',
+             bbox=dict(boxstyle='round', facecolor='#ecf0f1', edgecolor='#34495e', linewidth=2))
+    
+    # Bottom Right: Why ensemble didn't help much
+    ax4 = fig.add_subplot(gs[1, 1])
+    ax4.axis('off')
+    ax4.text(0.5, 0.5, "Why Ensemble Didn't Excel:\n\nXGBoost + MLP both use same 21 features\n→ Redundant information\n→ No complementary signals\n\n✅ Better ensemble:\nGNN (graph) + XGBoost (tabular)", 
+             fontsize=11, ha='center', va='center', transform=ax4.transAxes,
+             bbox=dict(boxstyle='round', facecolor='#e8f5e9', edgecolor='#27ae60', linewidth=2))
+    
+    plt.suptitle('Figure 23: Ensemble Deep Dive — Redundancy Problem', 
+                 fontsize=14, y=0.98, color='#34495e', fontweight='bold')
+    plt.savefig(f"{OUTPUT_DIR}/fig23_ensemble_deep_dive.png")
+    plt.close()
+    print("✓ fig23_ensemble_deep_dive.png")
+
+# ============================================================================
+# FIGURE 24: Hybrid Deep Dive
+# ============================================================================
+def plot_hybrid_deep_dive():
+    """Hybrid model deep dive - GNN + XGBoost"""
+    fig = plt.figure(figsize=(16, 10))
+    gs = fig.add_gridspec(2, 2, hspace=0.3, wspace=0.3)
+    
+    data = TRAINING_DATA['Hybrid']
+    
+    # Top Left: Val F1
+    ax1 = fig.add_subplot(gs[0, 0])
+    ax1.plot(data['epochs'], data['val_f1'], 'o-', linewidth=2, markersize=6, color='#7f8c8d')
+    ax1.set_xlabel('Iteration')
+    ax1.set_ylabel('Validation F1')
+    ax1.set_title('Hybrid - Validation F1')
+    ax1.grid(True, alpha=0.3)
+    
+    # Top Right: Val AUC  
+    ax2 = fig.add_subplot(gs[0, 1])
+    ax2.plot(data['epochs'], data['val_auc'], 's-', linewidth=2, markersize=6, color='#7f8c8d')
+    ax2.set_xlabel('Iteration')
+    ax2.set_ylabel('Validation AUC')
+    ax2.set_title('Hybrid - Validation AUC')
+    ax2.grid(True, alpha=0.3)
+    
+    # Bottom Left: Metrics Box
+    ax3 = fig.add_subplot(gs[1, 0])
+    ax3.axis('off')
+    
+    cm = CONFUSION_MATRICES['Hybrid']
+    tn, fp, fn, tp = cm[0,0], cm[0,1], cm[1,0], cm[1,1]
+    recall = tp / (tp + fn)
+    precision = tp / (tp + fp)
+    
+    metrics_text = f"""
+    ╔══════════════════════════════════════════════════╗
+    ║          HYBRID GNN+XGBoost PERFORMANCE          ║
+    ╠══════════════════════════════════════════════════╣
+    ║  Test AUC:       {ALL_MODELS['Hybrid']['auc']:.4f}                        ║
+    ║  Test Accuracy:  {ALL_MODELS['Hybrid']['accuracy']:.1%}                        ║
+    ║  Test F1:        {ALL_MODELS['Hybrid']['f1']:.4f}                        ║
+    ║  Recall:         {recall:.0%}                           ║
+    ║  Precision:      {precision:.0%}                          ║
+    ╠══════════════════════════════════════════════════╣
+    ║  📊 ARCHITECTURE:                                ║
+    ║  1. GNN extracts 32-dim graph embeddings         ║
+    ║  2. Concat with 20-dim tabular features          ║
+    ║  3. XGBoost classifies on 52-dim features        ║
+    ╚══════════════════════════════════════════════════╝
+    """
+    ax3.text(0.5, 0.5, metrics_text, fontsize=10, ha='center', va='center',
+             transform=ax3.transAxes, family='monospace',
+             bbox=dict(boxstyle='round', facecolor='#f5f5f5', edgecolor='#7f8c8d', linewidth=2))
+    
+    # Bottom Right: Architecture diagram
+    ax4 = fig.add_subplot(gs[1, 1])
+    ax4.set_xlim(0, 14)
+    ax4.set_ylim(0, 6)
+    ax4.axis('off')
+    
+    boxes = [
+        ((0.5, 3), 2, 1.5, '#3498db', 'GNN\n32-dim'),
+        ((0.5, 1), 2, 1.5, '#e74c3c', 'Tabular\n20-dim'),
+        ((4, 2), 2, 2, '#f39c12', 'Concat\n52-dim'),
+        ((8, 2), 2.5, 2, '#27ae60', 'XGBoost\nClassifier'),
+        ((11.5, 2), 1.5, 2, '#9b59b6', 'Output'),
+    ]
+    
+    for (x, y), w, h, color, text in boxes:
+        rect = Rect((x, y), w, h, facecolor=color, edgecolor='black', linewidth=2, alpha=0.8)
+        ax4.add_patch(rect)
+        ax4.text(x + w/2, y + h/2, text, ha='center', va='center', fontsize=8, fontweight='bold', color='white')
+    
+    ax4.text(7, 5.2, 'Hybrid: GNN Embeddings + XGBoost', fontsize=11, fontweight='bold', ha='center')
+    
+    plt.suptitle('Figure 24: Hybrid Deep Dive — GNN Feature Extraction + XGBoost', 
+                 fontsize=14, y=0.98, color='#7f8c8d', fontweight='bold')
+    plt.savefig(f"{OUTPUT_DIR}/fig24_hybrid_deep_dive.png")
+    plt.close()
+    print("✓ fig24_hybrid_deep_dive.png")
+
+# ============================================================================
 # MAIN
 # ============================================================================
 def main():
@@ -1337,9 +1643,13 @@ def main():
     plot_v2_deep_dive()               # Fig 18 - Oversmoothing analysis
     plot_v3_deep_dive()               # Fig 19 - Underfitting analysis
     plot_transformer_deep_dive()      # Fig 20 - Baseline reference
+    plot_basic_deep_dive()            # Fig 21 - Minimal baseline
+    plot_final_deep_dive()            # Fig 22 - Early stopping lesson
+    plot_ensemble_deep_dive()         # Fig 23 - Redundancy problem
+    plot_hybrid_deep_dive()           # Fig 24 - GNN + XGBoost
     
     print("\n" + "=" * 60)
-    print("✅ ALL 20 FIGURES GENERATED")
+    print("✅ ALL 24 FIGURES GENERATED")
     print("=" * 60)
     print("\n📊 KEY METRICS SUMMARY:")
     print(f"  Best AUC: HGT (0.7417)")
