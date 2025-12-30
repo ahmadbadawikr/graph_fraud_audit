@@ -785,7 +785,9 @@ weighted avg       0.88      0.84      0.86     22540
 - Moderate recall (38%) catches about 1/3 of actual fraud
 - This serves as the stable baseline for comparison
 
-![Figure 1: Training Curves](notebook_v1/paper_figures/fig02_individual_training.png)
+![Figure 21: Basic Model Deep Dive - Minimal 2-layer baseline](notebook_v1/paper_figures/fig21_basic_deep_dive.png)
+
+**Key Insight**: Even a minimal 6.4K parameter model achieves 0.70 AUC, proving that the graph structure itself holds significant predictive signal.
 
 ---
 
@@ -837,7 +839,9 @@ $$
 
 Where $\mathbf{\bar{h}}$ is the mean embedding across all nodes.
 
-![Figure 2: Overfitting Analysis](notebook_v1/paper_figures/fig08_v2_v3_comparison.png)
+![Figure 18: V2 Deep Dive - The Oversmoothing Disaster](notebook_v1/paper_figures/fig18_v2_deep_dive.png)
+
+**Key Insight**: Increasing depth to 3 layers hurt performance. This is classical "oversmoothing" in GNNs, where node representations become indistinguishable. **Deeper is not better.**
 
 ---
 
@@ -892,6 +896,10 @@ Fraud             987      803
 - Regularization successfully prevents overfitting
 - Recall improved to 41% (catching more fraud)
 - Best homogeneous model using `to_hetero` wrapper
+
+![Figure 19: V3 Deep Dive - The Underfitting Failure](notebook_v1/paper_figures/fig19_v3_deep_dive.png)
+
+**Key Insight**: Aggressive regularization (Dropout 0.5, Weight Decay 1e-3) strangled the model. AUC dropped to 0.60, and recall plummeted to 18%. **Start with minimal regularization.**
 
 ---
 
@@ -958,7 +966,9 @@ weighted avg       0.89      0.82      0.85     22540
 - Type-aware attention learns that "transfer" edges are more indicative of fraud than "ownership" edges
 - The 4 attention heads capture different fraud signals in parallel
 
-![Figure 4: Confusion Matrices](notebook_v1/paper_figures/fig03_all_confusion_matrices.png)
+![Figure 6: HGT Deep Dive - The Champion Architecture](notebook_v1/paper_figures/fig06_hgt_deep_dive.png)
+
+**Key Insight**: HGT allows "semantic attention" — it learns, for example, that a `transfer` edge from a `Pekerja` to a `Bank` is more risky than an `ownership` edge. The 4 attention heads specialize in detecting these different risk patterns.
 
 ---
 
@@ -1015,7 +1025,9 @@ weighted avg       0.89      0.82      0.85     22540
 - This proves the GNN captures **unique structural information** not present in raw tabular features
 - Hybrid approach combines the best of both worlds
 
-![Figure 7: Feature Importance](notebook_v1/paper_figures/fig05_complexity_performance.png)
+![Figure 24: Hybrid Deep Dive - Combining Graph & Tabular Power](notebook_v1/paper_figures/fig24_hybrid_deep_dive.png)
+
+**Key Insight**: The GNN acts as a powerful feature extractor. By concatenating the 32-dim graph embeddings with the 20-dim raw features, XGBoost can make decisions using both local node attributes and global structural context.
 
 ---
 
@@ -1044,7 +1056,9 @@ Searching over α (HGT), β (XGBoost), γ (MLP) in steps of 0.1:
 
 **Optimal Weights:** $\alpha = 0.6$, $\beta = 0.3$, $\gamma = 0.1$
 
-![Figure 6: Ensemble Weight Grid Search](notebook_v1/paper_figures/fig09_ensemble_hybrid.png)
+![Figure 23: Ensemble Deep Dive - The Redundancy Problem](notebook_v1/paper_figures/fig23_ensemble_deep_dive.png)
+
+**Key Insight**: While the ensemble provides a slight boost, it's limited by redundancy. The XGBoost and MLP components use the same base features, so their errors are correlated. True ensembling gains come from combining *diversity* (e.g., Image + Text, or here Graph + Tabular).
 
 **Final Ensemble Test Results (Threshold = 0.26):**
 | Metric | Value | Δ vs Best Single (HGT) |
@@ -1079,6 +1093,58 @@ weighted avg       0.89      0.80      0.84     22540
 ---
 
 ### 7.7 Summary: Experimental Progression (Real Results)
+
+| Experiment | Model | AUC | F1 | Key Note |
+|:-----------|:------|:----|:---|:---------|
+| SAGE | GraphSAGE 2L | 0.7043 | 0.2486 | Baseline homogeneous |
+| GAT | GAT 2L | 0.7067 | 0.2489 | Attention mechanism |
+| Transformer | TransformerConv 2L | 0.7164 | 0.2636 | Best homogeneous |
+| V2 (Kitchen Sink) | TransformerConv 3L | 0.7046 | 0.2559 | Overfit risk |
+| V3 (Regularized) | TransformerConv + Heavy Reg | 0.6078 | 0.1961 | **Degraded** ↓ |
+| Basic | Minimal Transformer | 0.7003 | 0.2637 | Simplest |
+| Final | Optimized Transformer | 0.7042 | 0.2661 | Tuned |
+| **HGT** | **HGTConv 2L** | **0.7417** | **0.2976** | **Champion** ↑ |
+| Ensemble | GNN + MLP + XGB | 0.7153 | 0.2475 | Combined |
+| Hybrid | GNN Embeddings + XGB | 0.6605 | 0.1874 | Embedding-based |
+
+![Figure 17: Comprehensive Metrics Heatmap - All 10 models × 5 metrics](notebook_v1/paper_figures/fig17_comprehensive_metrics.png)
+
+**Key Learnings (Based on Real Results):**
+1. **HGT is the champion**: Native heterogeneous attention (AUC=0.7417) outperforms all homogeneous wrappers.
+2. **Simple works**: Basic 2-layer models (SAGE, GAT, Transformer) all achieve ~0.70+ AUC.
+3. **Training length matters**: More epochs often degrade performance due to overfitting.
+
+---
+
+### 7.8 In-Depth Analysis: Why Each Model Performed This Way
+
+#### Why HGT Won (AUC=0.7417, F1=0.2976)
+
+**Technical Reason:** HGT uses **type-specific attention matrices** for each edge type.
+- The `debit`/`credit` edges (money flow) carry different fraud signals than `is_pekerja` edges (employment).
+- HGT learns **separate attention weights** for each, capturing multiple fraud patterns simultaneously.
+
+#### Why V3 Failed (AUC=0.6078)
+It was **over-regularized**. Combining Dropout 0.5, Weight Decay 1e-3, and small hidden dim stifled learning.
+
+#### Why Transformer/Final/Basic Are Similar
+All use the `to_hetero` wrapper. While `Transformer` (V1 baseline) performed well (0.7164), `Final` (optimized) actually degraded slightly (0.7042) due to over-training.
+
+![Figure 22: Final Model Deep Dive - The Early Stopping Lesson](notebook_v1/paper_figures/fig22_final_deep_dive.png)
+
+**Lesson**: As shown in Figure 22, the best AUC was at Epoch 5. Training to Epoch 12 caused performance to drop. **Early stopping is crucial.**
+
+#### Transformer - The Solid Baseline
+
+![Figure 20: Transformer Deep Dive - A strong baseline reference](notebook_v1/paper_figures/fig20_transformer_deep_dive.png)
+
+**Role**: TransformerConv stands as a balanced baseline. It doesn't have the high recall of GAT or the high precision of HGT, but it's stable and reliable.
+
+#### Why Hybrid Underperformed (AUC=0.6605)
+feature concatenation diluted the strong graph signals with weaker tabular features.
+
+#### Why Ensemble Was Mediocre (AUC=0.7153)
+Redundancy. XGBoost and MLP used the exact same features, providing little complementary information.
 
 | Experiment | Model | AUC | F1 | Key Note |
 |:-----------|:------|:----|:---|:---------|
@@ -1209,7 +1275,7 @@ This suggests the **graph topology itself** is informative—fraudsters connect 
 
 ---
 
-### 7.9 Model Selection for Fraud Detection: Recall vs Precision
+### 7.9 Final Model Selection: Strategy & Business Impact
 
 > [!IMPORTANT]
 > **For fraud detection, "best" depends on your business priority.**
@@ -1221,234 +1287,44 @@ This suggests the **graph topology itself** is informative—fraudsters connect 
 | Model | AUC | F1 | Precision | **Recall** | Fraudsters Caught | False Alarms |
 |:------|:----|:---|:----------|:-----------|:------------------|:-------------|
 | **GAT** | 0.7067 | 0.2489 | 0.15 | **0.75** | **75%** | High |
-| V2 (3-layer) | 0.7046 | 0.2559 | 0.15 | 0.67 | 67% | High |
-| Hybrid | 0.6605 | 0.1874 | 0.11 | 0.63 | 63% | Very High |
-| SAGE | 0.7043 | 0.2486 | 0.15 | 0.57 | 57% | High |
-| Ensemble | 0.7153 | 0.2475 | 0.16 | 0.48 | 48% | Moderate |
-| Basic | 0.7003 | 0.2637 | 0.18 | 0.44 | 44% | Moderate |
-| Final | 0.7042 | 0.2661 | 0.19 | 0.39 | 39% | Moderate |
+| HGT | 0.7417 | 0.2976 | 0.25 | 0.34 | 34% | Lowest |
 | Transformer | 0.7164 | 0.2636 | 0.20 | 0.36 | 36% | Lower |
-| **HGT** | **0.7417** | **0.2976** | **0.25** | 0.34 | 34% | **Lowest** |
 | V3 | 0.6078 | 0.1961 | 0.19 | 0.18 | 18% | Lower |
 
-#### Fraud Detection Priority Matrix
+![Figure 14: Fraud Detection Trade-off](notebook_v1/paper_figures/fig14_fraud_tradeoff.png)
 
-| Priority | Best Model | Key Metric | Trade-off |
-|:---------|:-----------|:-----------|:----------|
-| 🔴 **"Never miss a fraudster"** | **GAT** | Recall = 0.75 | High false alarm rate (85% of flagged are innocent) |
-| 🟡 **"Balanced approach"** | **HGT** | F1 = 0.2976, AUC = 0.7417 | Catches 34% of fraud, 75% precision |
-| 🟢 **"Reduce false alarms"** | **HGT** | Precision = 0.25 | Only 25% false alarm rate, but misses 66% of fraud |
+#### GAT - The "Safety First" Option
 
-#### Real-World Recommendation
+![Figure 6B: GAT Deep Dive - The Recall Champion](notebook_v1/paper_figures/fig06b_gat_deep_dive.png)
 
-For a **production fraud detection system**, we recommend a **two-stage approach**:
+**Why GAT has High Recall**: Its attention mechanism is "trigger-happy"—it flags an employee if *any* neighbor is suspicious. This creates a wide net that catches 3 out of 4 fraudsters (75% recall), at the cost of more false alarms.
 
-1. **Stage 1 - High-Recall Screening (GAT)**
-   - Use GAT as the first filter (Recall = 0.75)
-   - Flags 75% of actual fraudsters for further review
-   - Accepts high false positive rate at this stage
+#### Threshold Sensitivity
 
-2. **Stage 2 - Precision Refinement (HGT)**
-   - Apply HGT to the flagged cases
-   - Filters out false positives with higher precision
-   - Only true suspects reach human investigators
+![Figure 16: Threshold Sensitivity](notebook_v1/paper_figures/fig16_threshold_sensitivity.png)
 
-**Alternative: Single-Model Approach**
-- If only one model is feasible, choose based on cost:
-  - **High cost of missed fraud** → Use **GAT** (75% recall)
-  - **High cost of investigations** → Use **HGT** (25% precision, 0.74 AUC)
+**Critical Finding**: Threshold choice matters more than model architecture. Using HGT with a lower threshold (0.5) increases its recall from 34% to 73%!
 
-#### Why GAT Has Higher Recall Than HGT
+#### Final Recommendation
 
-**Technical Explanation:**
+| Priority | Strategy | Recommendation |
+|:---------|:---------|:---------------|
+| 🔴 **"Never miss fraud"** | **Max Recall** | **GAT (threshold 0.3)** |
+| 🟢 **"Minimize false alarms"** | **High Precision** | **HGT (threshold 0.5)** |
+| 🔬 **"Production Simplicity"** | **Single Model** | **HGT alone** (73% recall) |
 
-1. **GAT's attention mechanism** learns to focus on ANY suspicious neighbor, creating a "if any neighbor is suspicious, flag it" pattern → High recall, low precision
+**Two-Stage Pipeline Result**:
+We tested `GAT → HGT` (Screening → Refinement).
+- **Result**: 73.5% Recall
+- **Comparison**: HGT alone (at threshold 0.5) *also* achieved 73.5% recall.
+- **Verdict**: The extra complexity of two stages is **not justified**. Use a single, well-tuned HGT model.
 
-2. **HGT's type-specific attention** is more selective—it only flags nodes with suspicious patterns across MULTIPLE edge types simultaneously → Lower recall, higher precision
+![Figure 15: Model Selection Guide](notebook_v1/paper_figures/fig15_model_selection_guide.png)
 
-```
-GAT: "This employee connects to ONE suspicious transaction" → FLAG ✓
-HGT: "This employee connects to suspicious transactions AND suspicious accounts AND unusual patterns" → FLAG ✓
-```
-
-The second approach catches fewer fraudsters but is more accurate when it does flag someone.
+![Figure 13: Fraud Recall Ranking](notebook_v1/paper_figures/fig13_fraud_recall_ranking.png)
 
 ---
 
-![Figure 1: Complete Model Comparison](notebook_v1/paper_figures/fig01_complete_comparison.png)
-
-![Figure 2: Individual Training Curves](notebook_v1/paper_figures/fig02_individual_training.png)
-
-![Figure 3: All Confusion Matrices](notebook_v1/paper_figures/fig03_all_confusion_matrices.png)
-
-![Figure 4: Precision-Recall Tradeoff](notebook_v1/paper_figures/fig04_precision_recall_all.png)
-
-![Figure 6: HGT Deep Dive](notebook_v1/paper_figures/fig06_hgt_deep_dive.png)
-
-![Figure 8: V2 vs V3 Comparison](notebook_v1/paper_figures/fig08_v2_v3_comparison.png)
-
-![Figure 10: Experiment Timeline](notebook_v1/paper_figures/fig10_experiment_timeline.png)
-
-### Key Fraud Detection Figures
-
-![Figure 13: Fraud Recall Ranking - Models ranked by ability to catch fraudsters](notebook_v1/paper_figures/fig13_fraud_recall_ranking.png)
-
-![Figure 14: Fraud Detection Trade-off - Precision vs Recall with context](notebook_v1/paper_figures/fig14_fraud_tradeoff.png)
-
-![Figure 15: Model Selection Guide - Decision matrix for fraud detection priorities](notebook_v1/paper_figures/fig15_model_selection_guide.png)
-
-### Threshold Sensitivity & Production Pipeline
-
-![Figure 16: Threshold Sensitivity - Same model, different threshold = 34% vs 73% recall!](notebook_v1/paper_figures/fig16_threshold_sensitivity.png)
-
-**Key Insight**: The classification threshold dramatically affects fraud detection performance. An F1-optimized threshold (0.656) catches only 34% of fraudsters, while a lower threshold (0.5) catches 73%—using the exact same model!
-
-### Comprehensive Model Comparison
-
-![Figure 17: Comprehensive Metrics Heatmap - All 10 models × 5 metrics](notebook_v1/paper_figures/fig17_comprehensive_metrics.png)
-
-**Full Metrics Table (All 10 Models):**
-
-| Model | AUC | Accuracy | F1 | Precision | Recall |
-|:------|:----|:---------|:---|:----------|:-------|
-| **HGT** | **0.7417** | **87.6%** | **0.2976** | **25%** | 34% |
-| Transformer | 0.7164 | 82.6% | 0.2636 | 20% | 36% |
-| Ensemble | 0.7153 | 75.9% | 0.2475 | 16% | 48% |
-| **GAT** | 0.7067 | 61.9% | 0.2489 | 15% | **75%** |
-| V2 (3-layer) | 0.7046 | 66.4% | 0.2559 | 15% | 67% |
-| SAGE | 0.7043 | 70.9% | 0.2486 | 15% | 57% |
-| Final | 0.7042 | 81.2% | 0.2661 | 19% | 39% |
-| Basic | 0.7003 | 75.7% | 0.2637 | 18% | 44% |
-| Hybrid | 0.6605 | 63.0% | 0.1874 | 11% | 63% |
-| V3 (Regularized) | 0.6078 | 86.7% | 0.1961 | 19% | 18% |
-
-### Deep Dives: Learn from Failures and Successes
-
-#### V2 (3-Layer) - The Oversmoothing Disaster
-
-![Figure 18: V2 Deep Dive - Why deeper ≠ better for GNNs](notebook_v1/paper_figures/fig18_v2_deep_dive.png)
-
-**What Went Wrong**: Adding a 3rd layer caused "oversmoothing"—nodes became indistinguishable because information propagated too far. With 1M+ parameters, it was also massively overparameterized.
-
-**Lesson**: For fraud detection on dense graphs, **2 layers is optimal**.
-
----
-
-#### V3 (Regularized) - The Underfitting Failure
-
-![Figure 19: V3 Deep Dive - Over-regularization kills performance](notebook_v1/paper_figures/fig19_v3_deep_dive.png)
-
-**What Went Wrong**: 
-- Dropout 0.5 = too aggressive (use 0.3)
-- Weight decay 1e-3 = 10x too high (use 1e-4)
-- Hidden dim 32 = too constrained (use 64+)
-
-**Result**: Only 18% recall—the model couldn't learn anything meaningful!
-
-**Lesson**: Start with **minimal regularization**, then add as needed.
-
----
-
-#### Transformer - The Solid Baseline
-
-![Figure 20: Transformer Deep Dive - A strong baseline reference](notebook_v1/paper_figures/fig20_transformer_deep_dive.png)
-
-**Role**: TransformerConv with `to_hetero` wrapper—good AUC (0.7164), reasonable precision (20%), but moderate recall (36%).
-
-**Lesson**: Good for balanced trade-offs, but not optimal for catching maximum fraud.
-
----
-
-#### Basic Model - The Minimal Baseline
-
-![Figure 21: Basic Model Deep Dive - Smallest architecture, quick prototyping](notebook_v1/paper_figures/fig21_basic_deep_dive.png)
-
-**Role**: Minimal 2-layer TransformerConv with only 6.4K parameters. Good for quick prototyping but lacks precision.
-
-**Metrics**: AUC 0.7003, Accuracy 75.7%, F1 0.2637, Recall 44%
-
----
-
-#### Final Model - The Early Stopping Lesson
-
-![Figure 22: Final Model Deep Dive - Why more epochs ≠ better](notebook_v1/paper_figures/fig22_final_deep_dive.png)
-
-**Critical Finding**: Best AUC was at Epoch 5 (0.7127). Continued training to Epoch 12 degraded performance to 0.6539!
-
-**Lesson**: Always use early stopping. More training doesn't guarantee better results.
-
----
-
-#### Ensemble - The Redundancy Problem
-
-![Figure 23: Ensemble Deep Dive - XGBoost + MLP combination](notebook_v1/paper_figures/fig23_ensemble_deep_dive.png)
-
-**Why It Didn't Excel**: XGBoost and MLP both use the same 21 tabular features → redundant information, no complementary signals.
-
-**Better Approach**: Combine GNN (graph features) + XGBoost (tabular features) for true diversity.
-
----
-
-#### Hybrid - GNN Feature Extraction + XGBoost
-
-![Figure 24: Hybrid Deep Dive - Combining graph embeddings with traditional ML](notebook_v1/paper_figures/fig24_hybrid_deep_dive.png)
-
-**Architecture**:
-1. GNN extracts 32-dim graph embeddings
-2. Concatenate with 20-dim tabular features
-3. XGBoost classifies on 52-dim combined features
-
-**Metrics**: AUC 0.6605, Accuracy 63%, F1 0.1874, Recall 63%
-
-**Insight**: Feature extraction works, but the GNN embedding quality is critical.
-
----
-
-#### GAT - The Fraud Catcher Champion
-
-![Figure 6B: GAT Deep Dive - The best model for catching fraudsters](notebook_v1/paper_figures/fig06b_gat_deep_dive.png)
-
-**Why GAT Wins for Fraud Detection**:
-- **75% recall** = catches 3 out of 4 fraudsters
-- Attention mechanism focuses on suspicious neighbors
-- Lightweight: only 24K parameters
-
-**Trade-off**: Lower precision (15%) means more false positives, but in fraud detection, **missing a fraudster is worse than investigating an innocent person**.
-
----
-
-### 7.8 Final Model Selection: Which Model to Choose?
-
-After extensive experimentation across 10 model architectures, here is our definitive guidance:
-
-| Your Priority | Recommended Model | Why |
-|:--------------|:------------------|:----|
-| 🔴 **"Never miss fraud"** | **GAT (threshold 0.3)** | 75% recall - catches 3 out of 4 fraudsters |
-| 🟢 **"Minimize false alarms"** | **HGT (threshold 0.5)** | 87.6% accuracy, 25% precision |
-| 📊 **"Balanced approach"** | **HGT (threshold 0.5)** | Best AUC (0.7417) + 73% recall |
-| 🔬 **"Production simplicity"** | **HGT alone** | Single model, easier deployment |
-
-### Two-Stage Pipeline Results
-
-We implemented and tested a two-stage pipeline (GAT → HGT):
-
-| Approach | AUC | Recall | F1 |
-|:---------|:----|:-------|:---|
-| GAT Only (threshold 0.5) | 0.6640 | 63.9% | 0.2255 |
-| HGT Only (threshold 0.5) | 0.6841 | **73.5%** | 0.2243 |
-| Two-Stage (GAT→HGT) | 0.6640 | **73.5%** | 0.2243 |
-
-**Key Finding**: In our experiment, **HGT alone achieved the same recall as the two-stage pipeline!** The added complexity of two stages didn't provide significant benefit.
-
-**Why?** The threshold sensitivity matters more than the architecture. HGT with threshold 0.5 catches 73% of fraudsters. The two-stage approach filtered 42% of candidates but didn't improve final recall.
-
-**Production Recommendation**: 
-```
-For simplicity: Use HGT alone (threshold 0.5) → 73% recall, 87.6% accuracy
-For maximum recall: Use GAT (threshold 0.3) → 75%+ recall, more false positives
-```
-
----
 
 ## 8. Conclusion
 
