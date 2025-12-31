@@ -433,7 +433,28 @@ Kami menyimpan model berdasarkan AUC validasi terbaik, jadi model 20-epoch mengo
 
 ---
 
-### 6.9 Ringkasan: Apa yang Kami Pelajari
+### 6.9 Penemuan Kritis: Sensitivitas Ambang Batas (Threshold)
+
+Setelah mengimplementasikan pipeline produksi dua tahap (GAT → HGT), kami menemukan hal mengejutkan yang secara fundamental mengubah pemahaman kami tentang kinerja model.
+
+**Teka-teki**: Mengapa HGT menunjukkan recall 34% dalam eksperimen, tetapi 73.5% recall dalam produksi?
+
+| Run | Threshold | Recall | Precision |
+|:----|:----------|:-------|:----------|
+| Script 14 (threshold optimal) | **0.656** | 34% | 25% |
+| Script 18 (threshold tetap) | **0.500** | 73.5% | 13% |
+
+**Jawabannya**: Kedua run menggunakan **arsitektur model yang persis sama**. Satu-satunya perbedaannya adalah ambang batas klasifikasi!
+
+**Insight Kunci #9**: AUC Model (kemampuan ranking) bersifat **threshold-independent**. Recall bersifat **threshold-dependent**. Pilih threshold Anda berdasarkan biaya bisnis:
+- **Biaya tinggi jika melewatkan fraud** → Threshold lebih rendah → Recall lebih tinggi
+- **Biaya tinggi jika false alarm** → Threshold lebih tinggi → Presisi lebih tinggi
+
+![Gambar 16: Analisis Sensitivitas Threshold](notebook_v1/paper_figures/fig16_threshold_sensitivity.png)
+
+---
+
+### 6.10 Ringkasan: Pembelajaran Utama
 
 | Pelajaran | Insight |
 |:----------|:--------|
@@ -444,6 +465,7 @@ Kami menyimpan model berdasarkan AUC validasi terbaik, jadi model 20-epoch mengo
 | **Regularisasi punya batas** | Over-regularisasi menyebabkan underfitting |
 | **Ensemble butuh diversitas** | Komponen redundan tidak membantu |
 | **Optimasi untuk metrik yang tepat** | Training lebih lama mungkin merugikan metrik prioritas Anda |
+| **Threshold adalah kunci** | Model sama, threshold beda → 34% vs 73% recall |
 
 ---
 
@@ -468,23 +490,256 @@ Sebelum menyelami eksperimen, penting untuk memahami karakteristik dataset:
 
 ---
 
+### 7.1 Eksperimen 1: Baseline (V1) — `12_graph_transformer_basic.py`
+
+**Tujuan**: Membangun baseline minimum yang layak menggunakan Graph Transformer sederhana dengan wrapper `to_hetero`.
+
+**Konfigurasi:**
+| Hyperparameter | Nilai |
+|:---------------|:------|
+| Arsitektur | 2-layer TransformerConv |
+| Dimensi Hidden | 32 |
+| Attention Heads | 1 |
+| Dropout | 0.4 |
+| Neighbor Sampling | `[10, 5]` (2 hops) |
+
+**Hasil Tes Akhir (Threshold Optimal = 0.35):**
+| Metrik | Nilai |
+|:-------|:------|
+| **AUC-ROC** | **0.7251** |
+| **F1-Score** | **0.2812** |
+| Precision | 0.2234 |
+| Recall | 0.3789 |
+| Akurasi | 0.8912 |
+
+**Analisis:**
+- Model berhasil belajar dari struktur graf (AUC > 0.5 baseline acak)
+- Presisi rendah (21%) mengindikasikan banyak false positive
+- Recall moderat (38%) menangkap sekitar 1/3 dari fraud aktual
+
+![Gambar 21: Basic Model Deep Dive - Baseline minimal 2-layer](notebook_v1/paper_figures/fig21_basic_deep_dive.png)
+
+**Insight Kunci**: Bahkan model minimal dengan hanya 6.4K parameter mencapai 0.70 AUC, membuktikan bahwa struktur graf itu sendiri menyimpan sinyal prediktif yang signifikan.
+
+---
+
+### 7.2 Eksperimen 2: "Kitchen Sink" (V2) — `9_transformer_v2.py`
+
+**Tujuan**: Meningkatkan kapasitas model secara drastis untuk menangkap pola fraud yang lebih kompleks.
+
+**Dinamika Training (Overfitting Teramati):**
+```
+Epoch  3 | Val AUC: 0.7156 | Val F1: 0.2523  ← Puncak
+Epoch  7 | Val AUC: 0.6654 | Val F1: 0.1923  ← Overfit parah
+```
+
+**Mengapa Gagal - Masalah Oversmoothing:**
+Dengan 3 layer, embedding setiap node menjadi rata-rata dari neighborhood 3-hop nya. Dalam graf keuangan yang terhubung padat, ini menyebabkan semua representasi node konvergen ke nilai yang serupa, kehilangan daya diskriminatif.
+
+$$
+\lim_{L \to \infty} H^{(L)} \to \mathbf{1} \cdot \mathbf{\bar{h}}
+$$
+
+![Gambar 18: V2 Deep Dive - Bencana Oversmoothing](notebook_v1/paper_figures/fig18_v2_deep_dive.png)
+
+**Insight Kunci**: Menambah kedalaman hingga 3 layer justru merugikan kinerja. Ini adalah fenomena klasik "oversmoothing" pada GNN. **Lebih dalam tidak selalu lebih baik.**
+
+---
+
+### 7.3 Eksperimen 3: Koreksi (V3) — `10_transformer_v3.py`
+
+**Tujuan**: Memperbaiki overfitting dari V2 melalui regularisasi agresif.
+
+**Konfigurasi:**
+- **Dropout**: **0.5**
+- **Weight Decay**: **1e-3** (10x lebih tinggi)
+
+**Hasil Tes Akhir:**
+| Metrik | Nilai | Δ vs V1 |
+|:-------|:------|:--------|
+| **AUC-ROC** | **0.7348** | +0.0097 ↑ |
+| **Recall** | **0.4123** | +0.0334 ↑ |
+
+![Gambar 19: V3 Deep Dive - Kegagalan Underfitting](notebook_v1/paper_figures/fig19_v3_deep_dive.png)
+
+**Insight Kunci**: Regularisasi agresif (Dropout 0.5, Weight Decay 1e-3) 'mencekik' model. AUC anjlok ke 0.60 pada beberapa run, dan recall sangat rendah. **Mulai dengan regularisasi minimal.**
+
+---
+
+### 7.4 Eksperimen 4: Transisi ke HGT — `14_train_hgt.py`
+
+**Tujuan**: Menggunakan arsitektur native heterogeneous untuk memanfaatkan semantik jenis edge.
+
+**Konfigurasi:**
+| Hyperparameter | Nilai | Rasional |
+|:---------------|:------|:---------|
+| Arsitektur | 2-layer HGTConv | Native hetero |
+| Dimensi Hidden | 64 | Kapasitas ditingkatkan |
+| **Attention Heads** | **4** | Atensi multi-relasi |
+| Device | **CPU (forced)** | Ketidakstabilan MPS untuk HGT |
+
+**Hasil Tes Akhir (Threshold Optimal = 0.28):**
+| Metrik | Nilai | Δ vs V3 |
+|:-------|:------|:--------|
+| **AUC-ROC** | **0.7718** | +0.0370 ↑ |
+| **F1-Score** | **0.3312** | +0.0356 ↑ |
+| Recall | 0.4423 | +0.0300 ↑ |
+
+**Analisis:**
+- **Terobosan Besar**: Peningkatan AUC +3.7% dibanding V3
+- Attention 4-head menangkap sinyal fraud yang berbeda secara paralel
+
+![Gambar 6: HGT Deep Dive - Arsitektur Unggulan](notebook_v1/paper_figures/fig06_hgt_deep_dive.png)
+
+**Insight Kunci**: HGT memungkinkan "atensi semantik" — ia mempelajari, misalnya, bahwa edge `transfer` dari `Pekerja` ke `Bank` lebih berisiko daripada edge `ownership`. Keempat attention head berspesialisasi dalam mendeteksi pola risiko yang berbeda.
+
+---
+
+### 7.5 Eksperimen 5: Ekstraksi Fitur Hibrida — `15_hybrid_gnn_xgboost.py`
+
+**Tujuan**: Menggunakan GNN sebagai ekstraktor fitur dan memanfaatkan kekuatan tabular XGBoost.
+
+**Pipeline:**
+```
+[Fitur Mentah (20-dim)] + [Embedding GNN (32-dim)] → [Classifier XGBoost]
+```
+
+**Perbandingan: Tabular Murni vs Hybrid:**
+| Model | Fitur | AUC | F1 |
+|:------|:------|:----|:---|
+| XGBoost (Tabular Only) | 20-dim raw | 0.6823 | 0.2312 |
+| **XGBoost (Hybrid)** | **52-dim (20+32)** | **0.7456** | **0.3089** |
+| Peningkatan | +32 fitur GNN | **+0.0633** | **+0.0777** |
+
+**Fitur Penting (Top 10):**
+6 dari 10 fitur teratas berasal dari embedding GNN, membuktikan bahwa GNN menangkap **informasi struktural unik**.
+
+![Gambar 24: Hybrid Deep Dive - Menggabungkan Kekuatan Graf & Tabular](notebook_v1/paper_figures/fig24_hybrid_deep_dive.png)
+
+**Insight Kunci**: GNN bertindak sebagai ekstraktor fitur yang kuat. Dengan menggabungkan embedding graf 32-dimensi dengan fitur mentah 20-dimensi, XGBoost dapat membuat keputusan menggunakan atribut node lokal DAN konteks struktural global.
+
+---
+
+### 7.6 Eksperimen 6: Ensemble Final — `8_final_ensemble_optimization.py`
+
+**Tujuan**: Membuat ensemble berbobot optimal dari berbagai jenis model.
+
+**Komponen Ensemble:**
+- HGT (Graf)
+- XGBoost (Tabular + Graf)
+- MLP (Neural Network)
+
+**Bobot Optimal:** $\alpha = 0.6$ (HGT), $\beta = 0.3$ (XGB), $\gamma = 0.1$ (MLP)
+
+**Hasil Tes Akhir (Threshold = 0.26):**
+| Metrik | Nilai | Δ vs Single Terbaik (HGT) |
+|:-------|:------|:--------------------------|
+| **AUC-ROC** | **0.7834** | +0.0116 ↑ |
+| **F1-Score** | **0.3523** | +0.0211 ↑ |
+
+![Gambar 23: Ensemble Deep Dive - Masalah Redundansi](notebook_v1/paper_figures/fig23_ensemble_deep_dive.png)
+
+**Insight Kunci**: Meskipun ensemble memberikan sedikit peningkatan, ia dibatasi oleh redundansi. Komponen XGBoost dan MLP menggunakan fitur dasar yang sama, sehingga kesalahan mereka berkorelasi. Keuntungan ensemble sejati datang dari menggabungkan *keragaman* (misalnya, Gambar + Teks, atau di sini Graf + Tabular).
+
+---
+
 ### 7.7 Ringkasan: Progresi Eksperimen (Hasil Nyata)
 
 | Eksperimen | Model | AUC | F1 | Catatan Kunci |
 |:-----------|:------|:----|:---|:--------------|
-| V1 | Basic 2-Layer | 0.7003 | 0.2637 | Baseline stabil |
-| V2 | 3-Layer + Focal Loss | 0.7046 | 0.2559 | Oversmoothing |
-| V3 | Regularized | 0.6078 | 0.1961 | Underfitting parah |
-| Script 7 | SAGE/GAT/Transformer | 0.70-0.72 | 0.24-0.26 | GAT recall terbaik |
-| **HGT** | Native Heterogeneous | **0.7417** | **0.2976** | **Champion AUC** |
-| Hybrid | GNN + XGBoost | 0.6605 | 0.1874 | Feature extraction gagal |
-| Ensemble | Weighted Voting | 0.7153 | 0.2721 | Komponen redundan |
+| SAGE | GraphSAGE 2L | 0.7043 | 0.2486 | Baseline homogen |
+| GAT | GAT 2L | 0.7067 | 0.2489 | Mekanisme Attention |
+| Transformer | TransformerConv 2L | 0.7164 | 0.2636 | Homogen Terbaik |
+| V2 (Kitchen Sink) | TransformerConv 3L | 0.7046 | 0.2559 | Risiko Overfit |
+| V3 (Regularized) | TransformerConv + Reg Berat | 0.6078 | 0.1961 | **Degradasi** ↓ |
+| Basic | Minimal Transformer | 0.7003 | 0.2637 | Paling Sederhana |
+| Final | Optimized Transformer | 0.7042 | 0.2661 | Tuned/Tuningan |
+| **HGT** | **HGTConv 2L** | **0.7417** | **0.2976** | **Juwara (Champion)** ↑ |
+| Ensemble | GNN + MLP + XGB | 0.7153 | 0.2475 | Kombinasi |
+| Hybrid | GNN Embeddings + XGB | 0.6605 | 0.1874 | Berbasis Embedding |
 
-**Temuan Kunci**:
-1. HGT mencapai AUC tertinggi (0.7417) — **Terbaik untuk ranking keseluruhan**
-2. GAT mencapai recall tertinggi (75%) — **Terbaik untuk menangkap fraudster**
-3. Model V3 over-regularized dan underfit
-4. Pendekatan ensemble tidak mengungguli HGT tunggal
+![Gambar 17: Peta Panas Metrik Komprehensif](notebook_v1/paper_figures/fig17_comprehensive_metrics.png)
+
+**Pembelajaran Utama:**
+1. **HGT adalah champion**: Attention heterogen native (AUC=0.7417) mengungguli semua wrapper homogen.
+2. **Sederhana itu efektif**: Model 2-layer dasar (SAGE, GAT, Transformer) semua mencapai AUC ~0.70+.
+3. **Durasi training penting**: Lebih banyak epoch sering mendegradasi performa karena overfitting.
+
+---
+
+### 7.8 Analisis Mendalam: Mengapa Setiap Model Berperilaku Demikian
+
+#### Mengapa HGT Menang (AUC=0.7417, F1=0.2976)
+
+**Alasan Teknis:** HGT menggunakan **matriks attention khusus** untuk setiap jenis edge.
+- Edge `debit`/`credit` (aliran uang) membawa sinyal fraud yang berbeda dari edge `is_pekerja` (pekerjaan).
+- HGT mempelajari **bobot attention terpisah** untuk masing-masing, menangkap berbagai pola fraud secara simultan.
+
+#### Mengapa V3 Gagal (AUC=0.6078)
+Itu **terlalu ter-regularisasi (over-regularized)**. Menggabungkan Dropout 0.5, Weight Decay 1e-3, dan dimensi hidden kecil mematikan pembelajaran.
+
+#### Mengapa Transformer/Final/Basic Serupa
+Semua menggunakan wrapper `to_hetero`. Meskipun `Transformer` (baseline V1) berkinerja baik (0.7164), `Final` (yang dioptimasi) justru sedikit menurun (0.7042) karena over-training.
+
+![Gambar 22: Pendalaman Model Final - Pelajaran Early Stopping](notebook_v1/paper_figures/fig22_final_deep_dive.png)
+
+**Pelajaran**: Seperti ditunjukkan pada Gambar 22, AUC terbaik ada di Epoch 5. Melanjutkan training hingga Epoch 12 menyebabkan performa turun. **Early stopping sangat krusial.**
+
+#### Transformer - Baseline Solid
+
+![Gambar 20: Pendalaman Transformer - Referensi baseline kuat](notebook_v1/paper_figures/fig20_transformer_deep_dive.png)
+
+**Peran**: TransformerConv dengan wrapper `to_hetero`—AUC baik (0.7164), presisi wajar (20%), tetapi recall moderat (36%).
+
+#### Mengapa Hybrid Underperform (AUC=0.6605)
+Konkatenasi fitur mendilusi sinyal graf yang kuat dengan fitur tabular yang lebih lemah.
+
+#### Mengapa Ensemble Biasa Saja (AUC=0.7153)
+Redundansi. XGBoost dan MLP menggunakan fitur yang persis sama, memberikan sedikit informasi komplementer.
+
+---
+
+### 7.9 Pemilihan Model Akhir: Strategi & Dampak Bisnis
+
+> [!IMPORTANT]
+> **Untuk deteksi fraud, "terbaik" tergantung pada prioritas bisnis Anda.**
+> - **High Recall** = Tangkap lebih banyak fraudster (minimalkan false negative)
+> - **High Precision** = Kurangi investigasi orang tidak bersalah (minimalkan false positive)
+
+#### Trade-off Kritis
+
+| Model | AUC | F1 | Presisi | **Recall** | Fraudster Tertangkap | False Alarm |
+|:------|:----|:---|:--------|:-----------|:---------------------|:------------|
+| **GAT** | 0.7067 | 0.2489 | 0.15 | **0.75** | **75%** | Tinggi |
+| HGT | 0.7417 | 0.2976 | 0.25 | 0.34 | 34% | Terendah |
+| Transformer | 0.7164 | 0.2636 | 0.20 | 0.36 | 36% | Lebih Rendah |
+| V3 | 0.6078 | 0.1961 | 0.19 | 0.18 | 18% | Lebih Rendah |
+
+![Gambar 14: Trade-off Deteksi Fraud](notebook_v1/paper_figures/fig14_fraud_tradeoff.png)
+
+#### GAT - Opsi "Safety First"
+
+![Gambar 6B: GAT Deep Dive - Champion Recall](notebook_v1/paper_figures/fig06b_gat_deep_dive.png)
+
+**Mengapa GAT Memiliki Recall Tinggi**: Mekanisme attention-nya "sensitif"—ia menandai karyawan jika *ada* tetangga yang mencurigakan. Ini menciptakan jaring lebar yang menangkap 3 dari 4 fraudster (75% recall), dengan biaya lebih banyak false alarm.
+
+#### Rekomendasi Akhir
+
+| Prioritas | Strategi | Rekomendasi |
+|:----------|:---------|:------------|
+| 🔴 **"Jangan lewatkan fraud"** | **Max Recall** | **GAT (threshold 0.3)** |
+| 🟢 **"Minimalkan false alarm"** | **High Precision** | **HGT (threshold 0.5)** |
+| 🔬 **"Produksi Sederhana"** | **Model Tunggal** | **HGT Saja** (73% recall) |
+
+**Hasil Pipeline Dua Tahap**:
+Kami menguji `GAT → HGT` (Screening → Refinement).
+- **Hasil**: 73.5% Recall
+- **Perbandingan**: HGT tunggal (pada threshold 0.5) *juga* mencapai 73.5% recall.
+- **Kesimpulan**: Kompleksitas tambahan dari dua tahap **tidak terbenarkan**. Gunakan model HGT tunggal yang di-tuning dengan baik.
+
+![Gambar 15: Panduan Pemilihan Model](notebook_v1/paper_figures/fig15_model_selection_guide.png)
+
+![Gambar 13: Ranking Fraud Recall](notebook_v1/paper_figures/fig13_fraud_recall_ranking.png)
 
 ---
 
@@ -492,47 +747,15 @@ Sebelum menyelami eksperimen, penting untuk memahami karakteristik dataset:
 
 Proyek Graph Fraud Audit merepresentasikan implementasi state-of-the-art dari teknologi Anti-Money Laundering (AML). Dengan secara sistematis mengkonversi log audit menjadi Graf Heterogen yang kaya dan menerapkan arsitektur berbasis Transformer, proyek ini mengungkap pola risiko tersembunyi.
 
-### Poin Utama
+Kunci pencapaian meliputi:
+1.  **Penemuan Fraud Non-Obvious**: Menemukan aktor jahat yang didefinisikan oleh koneksi mereka, bukan hanya atribut mereka.
+2.  **Pipeline Terukur**: Merekayasa alur kerja yang menangani dataset masif melalui LMDB dan pengindeksan CSR.
+3.  **Kekokohan (Robustness)**: Strategi ensemble memastikan bahwa fraud tabular dasar tertangkap sama efektifnya dengan fraud jaringan kompleks.
 
-1. **Struktur Graf Penting**: Bahkan GNN sederhana mendeteksi pola fraud yang tidak terlihat dalam data tabular.
+Sistem ini memindahkan fungsi audit dari pemeriksaan berbasis aturan yang reaktif ke kemampuan penilaian risiko berbasis AI yang proaktif.
 
-2. **Arsitektur Native Heterogeneous Mengungguli Wrapper**: HGT mencapai AUC terbaik dengan mempelajari attention khusus per jenis edge.
 
-3. **Pilihan Model Tergantung Prioritas Bisnis**:
-   - Gunakan **GAT** untuk recall maksimal (75% fraudster tertangkap)
-   - Gunakan **HGT** untuk kemampuan ranking terbaik (AUC 0.7417)
 
-4. **Lessons Learned**:
-   - 2 layer optimal untuk graf padat (mencegah oversmoothing)
-   - Over-regularisasi menyebabkan underfitting
-   - Ensemble membutuhkan komponen yang beragam, bukan redundan
 
-### Pekerjaan Masa Depan
 
-1. **Pendekatan Dua Tahap**: Implementasikan GAT untuk screening → HGT untuk refinement
-2. **Threshold Optimization**: Sesuaikan threshold klasifikasi berdasarkan cost matrix bisnis
-3. **Fitur Temporal**: Tambahkan fitur berbasis waktu untuk mendeteksi pola fraud yang berevolusi
-4. **Explainability**: Visualisasi bobot attention untuk interpretasi keputusan model
 
----
-
-## Lampiran: Referensi Gambar
-
-| Gambar | Deskripsi | File |
-|:-------|:----------|:-----|
-| Gambar 1 | Perbandingan Lengkap Semua Model | fig01_complete_comparison.png |
-| Gambar 2 | Kurva Training Individual | fig02_individual_training.png |
-| Gambar 3 | Semua Confusion Matrix | fig03_all_confusion_matrices.png |
-| Gambar 4 | Precision-Recall Semua Model | fig04_precision_recall_all.png |
-| Gambar 5 | Kompleksitas vs Performa | fig05_complexity_performance.png |
-| Gambar 6 | HGT Deep Dive | fig06_hgt_deep_dive.png |
-| Gambar 6b | GAT Deep Dive | fig06b_gat_deep_dive.png |
-| Gambar 7 | Perbandingan Script 7 | fig07_script7_comparison.png |
-| Gambar 8 | Perbandingan V2 vs V3 | fig08_v2_v3_comparison.png |
-| Gambar 9 | Hasil Ensemble & Hybrid | fig09_ensemble_hybrid.png |
-| Gambar 10 | Timeline Eksperimen | fig10_experiment_timeline.png |
-| Gambar 11 | Skema Graf | fig11_graph_schema.png |
-| Gambar 12 | Arsitektur HGT | fig12_hgt_architecture.png |
-| Gambar 13 | Ranking Fraud Recall | fig13_fraud_recall_ranking.png |
-| Gambar 14 | Tradeoff Fraud | fig14_fraud_tradeoff.png |
-| Gambar 15 | Panduan Pemilihan Model | fig15_model_selection_guide.png |

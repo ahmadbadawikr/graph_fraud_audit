@@ -24,7 +24,7 @@ import torch.nn as nn
 # CONFIGURATION
 # ============================================================================
 
-ROOT_DIR = "/Volumes/Backup Plus/Zaman/graph"
+ROOT_DIR = "/Users/kasyfur/graph"
 DATA_DIR = os.path.join(ROOT_DIR, "data")
 OUTPUT_DIR = os.path.join(ROOT_DIR, "processed_fast")
 MAP_DIR = os.path.join(ROOT_DIR, "map_id")
